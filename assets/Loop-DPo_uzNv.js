@@ -1,0 +1,1 @@
+(function(){"use strict";let a;self.addEventListener("message",function(t){var e=t.data;switch(e.clear&&clearInterval(),e.loop){case"start":a=setInterval(()=>{self.postMessage("loop")},e.period);break;case"stop":clearInterval(a);break}},!1)})();
