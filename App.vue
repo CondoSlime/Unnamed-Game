@@ -14,9 +14,9 @@ save.rivals = deepClone(rivalsBase);
 for(let [index, entry] of Object.entries(skills.value)){
     save.skills[index] = {level:0, exp:0}
 }*/
-initGame();
-
 const gameSpeed = values.misc.gameSpeed;
+initGame();
+checkValues();
 let gameTimer;
 let autoSaveTimer;
 const webWorker = { w: false, s:false };
@@ -73,7 +73,7 @@ function gameLoop(){
     save.value.res.nutrients -= amount;
     save.value.res.size += amount * formulas.digestToSizeEff();
     if(nutrAction === 'digestion'){
-      if(refValues.value.advanceTimer('nutrAction') && senses > 1 && (amount * values.timers.nutrAction / gameSpeed) > save.value.res.nutrients){ //timer = ~30 seconds, 300 advances
+      if(refValues.value.advanceTimer('nutrAction') && senses > 1 && (amount * values.timers.nutrAction / gameSpeed) >= save.value.res.nutrients){ //timer = ~30 seconds, 300 advances
         save.value.misc.nutrAction = 'scouting'; //only start a scouting timer if you have below 200 instances (20s) worth of nutrient production
       }
     }
@@ -119,47 +119,40 @@ function gameLoop(){
   if(save.value.rivals.self.attacks >= 2){
     save.value.rivals.rival2.unlocked = true;
   }
-  const rivals = ['rival1', 'rival2'];
-  for(let i=0;i<rivals.length;i++){
-    const rivalName = rivals[i];
-    const otherRivalName = rivals[(i+1)%2];
+  for(let i=0;i<values.rivalNames.length;i++){ //['rival1', 'rival2']
+    const rivalName = values.rivalNames[i];
+    const otherRivalName = values.rivalNames[(i+1)%2];
     const currRival = save.value.rivals[rivalName];
     const otherRival = save.value.rivals[otherRivalName];
-    if(!currRival.alive){
-      statValues.value.jobEffect.senses[`effect_deceased_${rivalName}`] = 1.5;
-      statValues.value.jobEffect.digestion[`effect_deceased_${rivalName}`] = 1.5;
-      continue;
-    }
-    else{
-      delete statValues.value.jobEffect.senses[`effect_deceased_${rivalName}`];
-      delete statValues.value.jobEffect.digestion[`effect_deceased_${rivalName}`];
-    }
     currRival.size += formulas.rivalPassiveSizeGain(rivalName);
     if(currRival.unlocked && save.value.skills[`rival1Study`].level >= 1){ //both rivals can attack when the first rival is first studied
       let attackTimer = refValues.value.advanceTimer(`${rivalName}Attack`, formulas.rivalAttackSpeed(rivalName), ['subtract']);
       if(attackTimer){ //rival attacks
         save.value.rivals[rivalName].attacks++;
-        save.value.stats.rivals.hidden = false; //rival first reveals itself to be hostile, unhide the "rivals" stat.
-        refValues.value[`${rivalName}Warn`] = true;
-        let isConfused = save.value.rivals[rivalName].confuse >= values.rivals[rivalName].confuseMax;
-        let isFooled = save.value.rivals.self.mimicry >= values.rivals.self.mimicryMax;
+        refValues.value.rivals[rivalName].warn = true;
+        let isConfused = save.value.rivals[rivalName].confuse >= refValues.value.rivals[rivalName].confuseMax;
+        let isFooled = save.value.rivals.self.mimicry >= refValues.value.rivals.self.mimicryMax;
         if(isConfused){
           //rival attacks other rival.
-          currRival.confuse -= values.rivals[rivalName].confuseMax;
+          //rivals attacking each other does not cause them to grow.
+          currRival.confuse -= refValues.value.rivals[rivalName].confuseMax;
           let stolen = formulas.attackSizeStolen(rivalName, otherRivalName);
+          stolen = Math.min(stolen, save.value.rivals[otherRivalName].size);
           save.value.rivals[otherRivalName].size -= stolen;
           save.value.rivals[rivalName].stolen = stolen;
           save.value.rivals[rivalName].lastTarget = 'rival';
         }
         else if(isFooled){ //rival is fooled by your mimicry and does not attack.
-          save.value.rivals.self.mimicry -= values.rivals.self.mimicryMax;
+          save.value.rivals.self.mimicry -= refValues.value.rivals.self.mimicryMax;
           save.value.rivals[rivalName].stolen = 0;
           save.value.rivals[rivalName].lastTarget = 'fooled';
         }
         else{
           //rival attacks you
           let stolen = formulas.attackSizeStolen(rivalName, 'you');
+          stolen = Math.min(stolen, save.value.res.size-1);
           save.value.res.size -= stolen;
+          save.value.rivals[rivalName].size += formulas.rivalSizeGain(rivalName, stolen);
           save.value.rivals[rivalName].stolen = stolen;
           save.value.rivals[rivalName].lastTarget = "you";
         }
@@ -168,12 +161,17 @@ function gameLoop(){
           if(currRival.lastTarget === 'fooled'){
             confuseMult = 2; //when a rival is fooled by mimicry, applied confusion is doubled.
           }
-          currRival.confuse += formulas.rivalConfuseGain(rivalName) * confuseMult;
+          if(otherRival.alive){
+            currRival.confuse += formulas.rivalConfuseGain(rivalName) * confuseMult;
+          }
+          else{
+            currRival.confuse = 0; //no rival to attack, no confusion
+          }
         }
       }
     }
   }
-  if(attack > 1){
+  if(attack > 0){
     const target = ['rival1', 'rival2'].find((a) => save.value.rivals[a].alive);
     if(target){
       let attackTimer = refValues.value.advanceTimer('selfAttack', gameSpeed * aggression, ['subtract']);
@@ -185,18 +183,15 @@ function gameLoop(){
         save.value.rivals.self.stolen = stolen;
         save.value.rivals.self.lastTarget = target;
         save.value.rivals.self.mimicry += formulas.mimicryGain();
-        save.value.rivals.self.mimicry = Math.min(values.rivals.self.mimicryMax, save.value.rivals.self.mimicry);
-        if(save.value.rivals[target].size <= 0){
-          save.value.rivals[target].alive = false;
-        }
+        save.value.rivals.self.mimicry = Math.min(refValues.value.rivals.self.mimicryMax, save.value.rivals.self.mimicry);
       }
     }
   }
+  checkValues();
 };
 onUnmounted(() => {
-  if(save.value.settings.autoSave){
+  if(save.value.settings.autoSave){ //does not actually trigger on site exit. Does trigger in development when reloading the build.
     saveGame();
-    console.log("Saved game!");
   }
   if(webWorker){
     webWorker.w.postMessage({ loop:"stop" });
@@ -207,6 +202,27 @@ onUnmounted(() => {
   }
   clearInterval(autoSaveTimer);
 })
+
+function checkValues(){ //check state of values. Run once on page load too.
+  for(let i=0;i<values.rivalNames.length;i++){ //['rival1', 'rival2']
+    const rivalName = values.rivalNames[i];
+    const currRival = save.value.rivals[rivalName];
+    if(currRival.size <= 0){
+      save.value.rivals[rivalName].alive = false;
+    }
+    if(!currRival.alive){ //dead rivals grant a bonus to nutrients
+      statValues.value.jobEffect.senses[`effect_deceased_${rivalName}`] = 1.5;
+      statValues.value.jobEffect.digestion[`effect_deceased_${rivalName}`] = 1.5;
+    }
+    else{
+      delete statValues.value.jobEffect.senses[`effect_deceased_${rivalName}`];
+      delete statValues.value.jobEffect.digestion[`effect_deceased_${rivalName}`];
+    }
+  }
+  if(refValues.value.rivalAttacks >= 1){
+    refValues.value.stats.rivals.hidden = false; //rival first reveals itself to be hostile, unhide the "rivals" stat.
+  }
+}
 function autoSave(){
   if(save.value.settings.autoSave){
     saveGame();
@@ -223,7 +239,7 @@ const statRows = computed(() => {
     result += `<div class="statTitle">Base speed</div>`;
     for(let [index, entry] of Object.entries(statValues.value.baseEffect[refValues.value.showStat])){
       if(index === 'base'){
-        result += `<div>Base: 1</div>`;
+        result += `<div>Base: ${entry}</div>`;
       }
       else{
         result += `<div>${loc(`${index}`) || index}: ${format(entry, 4, 'eng')}`;
@@ -281,27 +297,41 @@ const rival1AttackInfo = computed(() => {
     else if(rival.lastTarget === 'rival'){
       return loc('rival_desc_attack_1', format(rival.stolen, 4, 'eng'));
     }
-    else if(rival.lastTarget === 'fooled'){
+    else if(rival.lastTarget === 'fooled' && !statValues.value.jobTotal('mindControl')){
       return loc('rival_desc_attack_2');
+    }
+    else if(rival.lastTarget === 'fooled'){
+      return loc('rival_desc_attack_3');
     }
   }
   return '';
 })
-const rival2AttackInfo = computed(() => {
+const rival2Info = computed(() => {
   const rival = save.value.rivals.rival2;
+  let content = '';
+  if(save.value.rivals.rival1.alive){
+    content += loc('rival2_desc');
+  }
+  else{
+    content += loc('rival2_desc_2');
+  }
   if(rival.attacks){
+    content += '<br>';
     if(rival.lastTarget === 'you'){
-      return loc('rival_desc_attack', format(rival.stolen, 4, 'eng'));
+      content += loc('rival_desc_attack', format(rival.stolen, 4, 'eng'));
     }
     else if(rival.lastTarget === 'rival'){
-      return loc('rival_desc_attack_1', format(rival.stolen, 4, 'eng'));
+      content += loc('rival_desc_attack_1', format(rival.stolen, 4, 'eng'));
+    }
+    else if(rival.lastTarget === 'fooled' && !statValues.value.jobTotal('mindControl')){
+      content += loc('rival_desc_attack_2');
     }
     else if(rival.lastTarget === 'fooled'){
-      return loc('rival_desc_attack_2');
+      content += loc('rival_desc_attack_3');
     }
   }
-  return '';
-})
+  return content;
+});
 </script>
 
 <template>
@@ -326,15 +356,15 @@ const rival2AttackInfo = computed(() => {
         <br>${loc('resDesc_focus_2', format(formulas.studyPenalty() * 100, 4, 'eng'))}`"/>
         {{loc('res_focus', format(study.max, 4, 'eng') - format(study.used, 4, 'eng'), format(study.max, 4, 'eng')) }}
       </div>
-      <div v-if="save.rivals.rival1.unlocked" class="resourceItem" @mouseover="refValues.rival1Warn=false" :class="{deadRival:!save.rivals.rival1.alive}">
+      <div v-if="save.rivals.rival1.unlocked" class="resourceItem" @mouseover="refValues.rivals.rival1.warn=false" :class="{deadRival:!save.rivals.rival1.alive}">
         <template v-if="!refValues.rivalAttacks">
           <Tooltip :pos="'bottom'" :text="`${loc('rival1_desc')}`"/>
           {{loc('rival1', format(save.rivals.rival1.size, 4, 'eng')) }}
         </template>
         <template v-else-if="save.rivals.rival1.alive">
-          <div class="warnNotif front" v-if="refValues.rival1Warn" :class="{neutral:save.rivals.rival1.lastTarget !== 'you'}">*</div> <!--notification star after an attack-->
+          <div class="warnNotif front" v-if="refValues.rivals.rival1.warn" :class="{neutral:save.rivals.rival1.lastTarget !== 'you'}">*</div> <!--notification star after an attack-->
           <ProgressBar v-if="save.skills.rival1Study.level >= 5" :width="`${save.timers.rival1Attack / values.timers.rival1Attack * 100}%`" :background="'#552222'" />
-          <ProgressBar :width="`${Math.min(100, save.rivals.rival1.confuse * values.rivals.rival1.confuseMax)}%`" :background="'#FF55AA'" :style="{height:'10%', bottom:0}" />
+          <ProgressBar :width="`${Math.min(100, save.rivals.rival1.confuse * refValues.rivals.rival1.confuseMax)}%`" :background="'#FF55AA'" :style="{height:'10%', bottom:0}" />
           <Tooltip :pos="'bottom'" :text="`${loc('rival1_desc_alt')}
           <br>${rival1AttackInfo}`"/>
           <span class="front">{{ loc('rival1_alt', format(save.rivals.rival1.size, 4, 'eng')) }}</span>
@@ -349,16 +379,15 @@ const rival2AttackInfo = computed(() => {
         <!--<br>${format(save.timers.selfAttack, 4, 'eng')}/${values.timers.selfAttack}-->
         ${save.rivals.self.lastTarget ? `<br>${loc('self_combat_desc_2', format(save.rivals.self.stolen, 4, 'eng'), loc(`${save.rivals.self.lastTarget}_name`))}` : ''}`"/>
         <ProgressBar :width="`${save.timers.selfAttack / values.timers.selfAttack * 100}%`" :background="'#225522'" />
-        <ProgressBar :width="`${Math.min(100, save.rivals.self.mimicry * values.rivals.self.mimicryMax)}%`" :background="'#CCCCCC'" :style="{height:'10%', bottom:0}" />
+        <ProgressBar :width="`${Math.min(100, save.rivals.self.mimicry * refValues.rivals.self.mimicryMax)}%`" :background="'#CCCCCC'" :style="{height:'10%', bottom:0}" />
         <span class="front">{{ "Combat timer" }}</span>
       </div>
-      <div v-if="save.rivals.rival2.unlocked" class="resourceItem" @mouseover="refValues.rival2Warn=false" :class="{deadRival:!save.rivals.rival1.alive}">
+      <div v-if="save.rivals.rival2.unlocked" class="resourceItem" @mouseover="refValues.rivals.rival2.warn=false" :class="{deadRival:!save.rivals.rival2.alive}">
         <template v-if="save.rivals.rival2.alive">
-          <div class="warnNotif front" v-if="refValues.rival2Warn" :class="{neutral:save.rivals.rival2.lastTarget !== 'you'}">*</div> <!--notification star after an attack-->
+          <div class="warnNotif front" v-if="refValues.rivals.rival2.warn" :class="{neutral:save.rivals.rival2.lastTarget !== 'you'}">*</div> <!--notification star after an attack-->
           <ProgressBar v-if="save.skills.rival2Study.level >= 5" :width="`${save.timers.rival2Attack / values.timers.rival2Attack * 100}%`" :background="'#552222'" />
-          <ProgressBar :width="`${Math.min(100, save.rivals.rival2.confuse * values.rivals.rival2.confuseMax)}%`" :background="'#FF55AA'" :style="{height:'10%', bottom:0}" />
-          <Tooltip :pos="'bottom'" :text="`${loc('rival2_desc')}
-          <br>${rival2AttackInfo}`"/>
+          <ProgressBar :width="`${Math.min(100, save.rivals.rival2.confuse * refValues.rivals.rival2.confuseMax)}%`" :background="'#FF55AA'" :style="{height:'10%', bottom:0}" />
+          <Tooltip :pos="'bottom'" :text="`${rival2Info}`"/>
           <span class="front">{{loc('rival2', format(save.rivals.rival2.size, 4, 'eng')) }}</span>
         </template>
         <template v-else>

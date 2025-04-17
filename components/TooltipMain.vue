@@ -13,12 +13,12 @@ const recalc = () => {
     bottomPos.value = Math.max(0, bottomPos.value - rect.bottom); //increase or decrease position if tooltip is about to go off the left side.
   }
 }*/
-const offsets = {
+/*const offsets = {
   top:[0, 0.5],
   left:[0.5, 0],
   bottom:[1, 0.5],
   right:[0.5, 1]
-}
+}*/
 
 onUpdated(() => { //update tooltip size on text change. Runs after text placed in tooltip.
   /*if(compareText !== props.text){
@@ -26,12 +26,12 @@ onUpdated(() => { //update tooltip size on text change. Runs after text placed i
     recalc();
   }*/
   if(update){
-    update = false;
+    update--;
     if(TT.value.originElem instanceof Element){
       const rect = TT.value.originElem.getBoundingClientRect(); //get element dimensions
       const TTrect = tooltipElem.value.getBoundingClientRect();
       let posVal;
-      if(TT.value.pos instanceof Array){ posVal = TT.value.pos; }
+      /*if(TT.value.pos instanceof Array){ posVal = TT.value.pos; }
       else{ posVal = offsets[TT.value.pos]; }
       topPos.value = Math.max(0, rect.top - TTrect.height * (1 - posVal[0]) + rect.height * posVal[0]);
       if(TT.value.pos === 'top'){ topPos.value -= 10; }
@@ -50,12 +50,29 @@ onUpdated(() => { //update tooltip size on text change. Runs after text placed i
       }
       if(leftPos.value < 0){
         leftPos.value = 0;
+      }*/
+     
+      const width = tooltipElem.value.clientWidth;
+      const height = tooltipElem.value.clientHeight;
+      topPos.value = rect.top - TTrect.height - 10;
+      if(topPos.value < 0){
+        topPos.value = rect.top + rect.height + 10;
+      }
+      if(topPos.value + TTrect.height > window.innerHeight){
+        topPos.value = window.innerHeight - TTrect.height;
+      }
+      leftPos.value = rect.left + (rect.width * 0.5) - (TTrect.width * 0.5);
+      if(leftPos.value < 0){
+        leftPos.value = 0;
+      }
+      if(leftPos.value + TTrect.width > window.innerWidth){
+        leftPos.value = window.innerWidth - TTrect.width;
       }
     }
   }
 })
 watch((TT.value), () => {
-  update = true;
+  update = 2; //update twice to ensure dimensions and placement are correct.
 })
 </script>
 
@@ -72,6 +89,7 @@ watch((TT.value), () => {
   background:black;
   z-index:1001;
   pointer-events:none;
+  word-break:keep-all;
 }
 /*.tooltip.top{ transform:translate(0, -10px); }
 .tooltip.right{ transform:translate(10px, 0); }

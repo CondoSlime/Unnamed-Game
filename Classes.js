@@ -119,10 +119,10 @@ export class skill{
         }
         return this.priceEffect * (this.scaleEffect ** this.level);
     }
-    update(){
+    update(force=false){
         //check if upgrade becomes unlocked
         //skills with the 'relock' tag can become locked again which disables their bonuses but keeps exp and levels
-        let update = false;
+        let update = force;
         if((this.tags.includes('relock') && this.unlocked !== this.unlockCondition()) || 
         (!this.unlocked && this.unlockCondition())){
             this.unlocked = this.unlockCondition();

@@ -17,9 +17,6 @@ export const save = ref({
   misc:{
 
   },
-  stats:{
-
-  },
   rivals:{
 
   },
@@ -49,11 +46,12 @@ export function loadGame(result=false){
                     save.value.skills[index] = {exp:0, level:0, unlocked:false, enabled:false};
                 }
             }
-            for(let [index, entry] of Object.entries(values.stats)){
+            /*for(let [index, entry] of Object.entries(values.stats)){
+                console.log(index);
                 if(!save.value.skills[index]){
                     save.value.skills[index] = decoded.stats[index];
                 }
-            }
+            }*/
             /*save.value.rivals = deepClone(decoded.rivals);
             save.value.study = deepClone(decoded.study);
             save.value.settings = deepClone(decoded.settings);*/
@@ -89,7 +87,7 @@ export function initGame(){
     statValues.value.initialize(values.stats, skills.value);
     loadGame();
     for(let [index, entry] of Object.entries(skills.value)){
-      entry.update(); //update stats immediately on page load.
+      entry.update(true); //update stats immediately on page load.
     }
 }
 export function resetGame(){
