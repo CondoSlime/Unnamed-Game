@@ -125,7 +125,7 @@ function gameLoop(){
     const currRival = save.value.rivals[rivalName];
     const otherRival = save.value.rivals[otherRivalName];
     currRival.size += formulas.rivalPassiveSizeGain(rivalName);
-    if(currRival.unlocked && save.value.skills[`rival1Study`].level >= 1){ //both rivals can attack when the first rival is first studied
+    if(currRival.unlocked && currRival.alive && save.value.skills[`rival1Study`].level >= 1){ //both rivals can attack when the first rival is first studied
       let attackTimer = refValues.value.advanceTimer(`${rivalName}Attack`, formulas.rivalAttackSpeed(rivalName), ['subtract']);
       if(attackTimer){ //rival attacks
         save.value.rivals[rivalName].attacks++;
