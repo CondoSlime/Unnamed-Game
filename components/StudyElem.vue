@@ -30,12 +30,12 @@ const lingeringExpBar = computed(() => {
 </script>
 
 <template>
-    <div v-if="skill.unlocked" class="studyElem" @click="study.switch(skill.id)">
+    <div v-if="skill.unlocked" class="studyElem" :class="{active:study.order.includes(skill.id)}" @click="study.switch(skill.id)">
       <Tooltip :text="skill.description()" :pos="'top'"/>
       <div class="inner">
         <div class="studyTop">
           <div class="activator">
-            <div class="activator-skill" :class="{active:study.order.includes(skill.id)}"></div>
+            <div class="activator-skill"></div>
           </div>
           <div class="title skill">{{loc(`skill_${skill.id}`)}}</div>
           <div class="level" v-if="!skill.capped">{{format(skill.level, 4, 'eng')}}</div>
@@ -45,15 +45,15 @@ const lingeringExpBar = computed(() => {
       </div>
       <div class="studyBottom">
         <template v-if="skill.levelSpeed > 0.5 && study.order.includes(skill.id)">
-          <Progressbar :background="'#774444'" :width="`100%`"></Progressbar>
+          <Progressbar :type="'bar'" :color="'#774444'" :progress="100"></Progressbar>
           <div class="progressText">{{format(skill.levelSpeed, 4, 'eng')}}/s</div>
         </template>
         <template v-else-if="skill.capped">
-          <Progressbar :background="'#552222'" :width="'100%'"></Progressbar>
+          <Progressbar :type="'bar'" :color="'#552222'" :progress="100"></Progressbar>
           <div class="progressText">MAX</div>
         </template>
         <template v-else>
-          <Progressbar :background="'#552222'" :width="`${lingeringExpBar}%`"></Progressbar>
+          <Progressbar :type="'bar'" :color="'#552222'" :progress="lingeringExpBar"></Progressbar>
           <div class="progressText">{{format(skill.exp, 4, 'eng')}}/{{format(skill.required(), 4, 'eng')}}</div>
         </template>
       </div>
@@ -74,6 +74,9 @@ const lingeringExpBar = computed(() => {
     display:flex;
     height:60%;
 }
+.studyElem{
+  transition: box-shadow 3s;
+}
 .activator{
     width:calc(100%/6);
     display:flex;
@@ -86,8 +89,11 @@ const lingeringExpBar = computed(() => {
     border:1px solid #777777;
     border-radius:3px;
 }
-.activator-skill.active{
+.active .activator-skill{
     background:#444400;
+}
+.active{
+  box-shadow:0 0 10px 3px #444400;
 }
 .title{
     width:calc(100%/6*4);

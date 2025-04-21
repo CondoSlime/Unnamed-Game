@@ -31,7 +31,7 @@ onUpdated(() => {
 </script>
 
 <template>
-  <span class="tooltipElem" :class="{full:props.full}" ref="elem" @mouseenter="showTooltip" @mouseleave.capture.self="clearTooltip">
+  <span class="tooltipElem" ref="elem" @mouseenter="showTooltip" @mouseleave.capture.self="clearTooltip">
   </span>
 </template>
 

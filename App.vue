@@ -7,7 +7,7 @@ import {ref, onMounted, onUnmounted, computed} from 'vue';
 import {save, initGame, saveGame, loadGame, exportGame, importGame, resetGame} from './Save.js';
 import {format} from './Functions.js';
 import loc from './Localization.js';
-import {statValues, skills, skillsOrder, values, refValues, study, formulas} from './Values.js';
+import {statValues, skills, skillsOrder, values, refValues, initRefValues, skillLockByTag, study, formulas} from './Values.js';
 
 /*save.stats = deepClone(entry);
 save.rivals = deepClone(rivalsBase);
@@ -37,7 +37,7 @@ onMounted(() => {
   autoSaveTimer = setInterval(() => autoSave(), 60000);
 })
 function gameLoop(){
-  for(let i=0;i<study.value.order.length; i++){
+  for(let i=study.value.order.length-1;i>=0; i--){
     const activeVal = study.value.order[i];
     skills.value[activeVal].advance(gameSpeed * 10); //level up activated skills
     if(skills.value[activeVal].capped){
@@ -48,33 +48,26 @@ function gameLoop(){
     entry.update(); //check if new skills can be unlocked. Can lock skills again if the ['relock'] tag for said skill is set.
     //also checks for whether skill effect is updated, which changes how how skills affect stats
   }
-  //console.log(statValues.value.allStats());
-  //console.log(skills.movement.value.convertExp(200, 10), skills.movement.value.convertLevel(2));
-  const senses = statValues.value.jobTotal('senses');
-  const digestion = statValues.value.jobTotal('digestion');
+  const gathering = formulas.nutrientGathering();
+  const digestion = formulas.nutrientDigestion();
   const size = save.value.res.size;
-  const attack = statValues.value.jobTotal('attack');
-  const aggression = statValues.value.jobTotal('attackSpeed');
+  const attack = statValues.value.effectTotal('attack');
+  const aggression = statValues.value.effectTotal('attackSpeed');
   const nutrAction = save.value.misc.nutrAction;
-  if(senses > 1){ /*find nutrients based on senses */
-    //Nutrients found is equal to 1% of your senses stats (0.03 scoutSpeed)
-    let amount = formulas.nutrientGathering();
-    save.value.res.nutrients += amount;
+
+  if(save.value.skills.scouting.level >= 1 || save.value.res.nutrients > 0){
+    save.value.res.nutrients += gathering; //find nutrients
     if(nutrAction === 'scouting'){
-      if(refValues.value.advanceTimer('nutrAction') && digestion > 1 && (amount * values.timers.nutrAction / gameSpeed) <= save.value.res.nutrients){ //timer = ~30 seconds, 300 advamces
-        save.value.misc.nutrAction = 'digestion'; //only start a digestion timer if you have at least 200 instances (20s) worth of nutrient production
+      if(refValues.value.advanceTimer('nutrAction')){ //cycle from gathering into digestion after 30s
+        save.value.misc.nutrAction = 'digestion';
       }
     }
-  }
-  if(digestion > 1){ /*digest nutrients to grow in size */
-    //digestion is equal to 1% of your digestion stat
-    
-    const amount = formulas.nutrientDigestion();
-    save.value.res.nutrients -= amount;
-    save.value.res.size += amount * formulas.digestToSizeEff();
+
+    save.value.res.nutrients -= digestion; //digest nutrients into size
+    save.value.res.size += formulas.digestSizeGain(digestion);
     if(nutrAction === 'digestion'){
-      if(refValues.value.advanceTimer('nutrAction') && senses > 1 && (amount * values.timers.nutrAction / gameSpeed) >= save.value.res.nutrients){ //timer = ~30 seconds, 300 advances
-        save.value.misc.nutrAction = 'scouting'; //only start a scouting timer if you have below 200 instances (20s) worth of nutrient production
+      if(refValues.value.advanceTimer('nutrAction')){ //cycle from gathering into digestion after 30s
+        save.value.misc.nutrAction = 'scouting';
       }
     }
   }
@@ -124,8 +117,8 @@ function gameLoop(){
     const otherRivalName = values.rivalNames[(i+1)%2];
     const currRival = save.value.rivals[rivalName];
     const otherRival = save.value.rivals[otherRivalName];
-    currRival.size += formulas.rivalPassiveSizeGain(rivalName);
     if(currRival.unlocked && currRival.alive && save.value.skills[`rival1Study`].level >= 1){ //both rivals can attack when the first rival is first studied
+      currRival.size += formulas.rivalPassiveSizeGain(rivalName);
       let attackTimer = refValues.value.advanceTimer(`${rivalName}Attack`, formulas.rivalAttackSpeed(rivalName), ['subtract']);
       if(attackTimer){ //rival attacks
         save.value.rivals[rivalName].attacks++;
@@ -135,15 +128,22 @@ function gameLoop(){
         if(isConfused){
           //rival attacks other rival.
           //rivals attacking each other does not cause them to grow.
-          currRival.confuse -= refValues.value.rivals[rivalName].confuseMax;
-          let stolen = formulas.attackSizeStolen(rivalName, otherRivalName);
-          stolen = Math.min(stolen, save.value.rivals[otherRivalName].size);
-          save.value.rivals[otherRivalName].size -= stolen;
-          save.value.rivals[rivalName].stolen = stolen;
-          save.value.rivals[rivalName].lastTarget = 'rival';
+          //if other rival is dead, it does not attack instead.
+          currRival.confuse = 0;
+          if(otherRival.alive){
+            let stolen = formulas.attackSizeStolen(rivalName, otherRivalName);
+            stolen = Math.min(stolen, save.value.rivals[otherRivalName].size);
+            save.value.rivals[otherRivalName].size -= stolen;
+            save.value.rivals[rivalName].stolen = stolen;
+            save.value.rivals[rivalName].lastTarget = 'rival';
+          }
+          else{
+            save.value.rivals[rivalName].stolen = 0;
+            save.value.rivals[rivalName].lastTarget = 'confused';
+          }
         }
         else if(isFooled){ //rival is fooled by your mimicry and does not attack.
-          save.value.rivals.self.mimicry -= refValues.value.rivals.self.mimicryMax;
+          save.value.rivals.self.mimicry = 0;
           save.value.rivals[rivalName].stolen = 0;
           save.value.rivals[rivalName].lastTarget = 'fooled';
         }
@@ -156,17 +156,8 @@ function gameLoop(){
           save.value.rivals[rivalName].stolen = stolen;
           save.value.rivals[rivalName].lastTarget = "you";
         }
-        if(otherRival.unlocked){
-          let confuseMult = 1;
-          if(currRival.lastTarget === 'fooled'){
-            confuseMult = 2; //when a rival is fooled by mimicry, applied confusion is doubled.
-          }
-          if(otherRival.alive){
-            currRival.confuse += formulas.rivalConfuseGain(rivalName) * confuseMult;
-          }
-          else{
-            currRival.confuse = 0; //no rival to attack, no confusion
-          }
+        if(currRival.lastTarget === 'fooled'){
+          currRival.confuse += formulas.rivalConfuseGain(rivalName) * 2; //when a rival is fooled by mimicry, apply 2x your confusion to them.
         }
       }
     }
@@ -183,11 +174,20 @@ function gameLoop(){
         save.value.rivals.self.stolen = stolen;
         save.value.rivals.self.lastTarget = target;
         save.value.rivals.self.mimicry += formulas.mimicryGain();
+        save.value.rivals[target].confuse += formulas.rivalConfuseGain(target);
+        if(target === 'rival1' && save.value.rivals.rival2.unlocked){
+          save.value.rivals.rival2.confuse += formulas.rivalConfuseGain('rival2') / 2; //apply half confusion to non-target rivals.
+        }
         save.value.rivals.self.mimicry = Math.min(refValues.value.rivals.self.mimicryMax, save.value.rivals.self.mimicry);
       }
     }
   }
   checkValues();
+  /*<div class="attackProgress" :style="{background: `conic-gradient(${false ? 'transparent' : '#228822'} ${save.timers.selfAttack / values.timers.selfAttack * 360}deg, transparent 0deg)`}">
+            </div>
+            <svg style="width:100%; height:100%; overflow:visible; min-height:50px; min-width:50px; top:50%; left:50%; transform:translate(-50%, -50%); position:absolute;" preserveAspectRatio="xMinYMin meet" viewBox="0 0 100 100">
+              <circle r="50" cx="50" cy="50" style="fill:none; stroke: red; stroke-width: 10px; stroke-dasharray: 100 999; stroke-dashoffset: 0; transform-origin:0 0;"></circle>
+            </svg>*/
 };
 onUnmounted(() => {
   if(save.value.settings.autoSave){ //does not actually trigger on site exit. Does trigger in development when reloading the build.
@@ -209,15 +209,27 @@ function checkValues(){ //check state of values. Run once on page load too.
     const currRival = save.value.rivals[rivalName];
     if(currRival.size <= 0){
       save.value.rivals[rivalName].alive = false;
+      save.value.rivals[rivalName].confuse = 0;
+      save.value.timers[`${rivalName}Attack`] = 0;
     }
     if(!currRival.alive){ //dead rivals grant a bonus to nutrients
-      statValues.value.jobEffect.senses[`effect_deceased_${rivalName}`] = 1.5;
-      statValues.value.jobEffect.digestion[`effect_deceased_${rivalName}`] = 1.5;
+      statValues.value.effect.scouting[`effect_deceased_${rivalName}`] = 1.5;
+      statValues.value.effect.nutrientDigestion[`effect_deceased_${rivalName}`] = 1.5;
     }
     else{
-      delete statValues.value.jobEffect.senses[`effect_deceased_${rivalName}`];
-      delete statValues.value.jobEffect.digestion[`effect_deceased_${rivalName}`];
+      delete statValues.value.effect.scouting[`effect_deceased_${rivalName}`];
+      delete statValues.value.effect.nutrientDigestion[`effect_deceased_${rivalName}`];
     }
+  }
+  if(!save.value.rivals.rival1.alive){
+    refValues.value.rivals.rival2.confuseGain = 1;
+  }
+  else{
+    refValues.value.rivals.rival2.confuseGain = values.rivals.rival2.baseConfuseGain;
+  }
+  if(!refValues.value.rivalsAlive){
+    save.value.timers.selfAttack = 0;
+    save.value.rivals.self.mimicry = 0;
   }
   if(refValues.value.rivalAttacks >= 1){
     refValues.value.stats.rivals.hidden = false; //rival first reveals itself to be hostile, unhide the "rivals" stat.
@@ -234,14 +246,18 @@ const statRows = computed(() => {
   let result = '';
   if(refValues.value.showStat){
     result += `<div style="font-size:1.5rem;">${loc(`stat_${refValues.value.showStat}`)}</div>`;
-    result += `<div style="font-size:1.35rem;">Study rate: ${format(statValues.value.studyTotal(refValues.value.showStat), 4, 'eng')}</div>`;
-    result += `<div style="font-size:1.35rem;">Non-study rate: ${format(statValues.value.jobTotal(refValues.value.showStat), 4, 'eng')}</div>`;
-    result += `<div class="statTitle">Base speed</div>`;
+    const tags = refValues.value.stats[refValues.value.showStat];
+    result += `<div style="font-size:1.5rem;">${loc(`statDesc_${refValues.value.showStat}`)}</div>`;
+    result += `<div style="font-size:1.35rem;">Total: ${format(statValues.value.effectTotal(refValues.value.showStat), 4, 'eng')}</div>`;
+    result += `<div class="statTitle">Base modifiers</div>`;
     for(let [index, entry] of Object.entries(statValues.value.baseEffect[refValues.value.showStat])){
-      if(index === 'base'){
+      /*if(index === 'base'){
         result += `<div>Base: ${entry}</div>`;
       }
       else{
+        result += `<div>${loc(`${index}`) || index}: ${format(entry, 4, 'eng')}`;
+      }*/
+      if(entry !== 0 || index === "base"){
         result += `<div>${loc(`${index}`) || index}: ${format(entry, 4, 'eng')}`;
       }
     }
@@ -251,18 +267,14 @@ const statRows = computed(() => {
         result += `<div>${loc(`${index}`) || index}: +${format((entry-1) * 100, 4, 'eng')}%`;
       }
     }
-    result += `<div>Split focus: -${format((1 - formulas.studyPenalty()) * 100, 4, 'eng')}%</div>`;
-    result += `<div>Size: +${format((formulas.sizeBonus()-1) * 100, 4, 'eng')}%</div>`;
-    result += `<div class="statTitle">Multiplicative study modifiers</div>`;
-    for(let [index, entry] of Object.entries(statValues.value.studyEffect[refValues.value.showStat])){
-      if(entry !== 1){
-        result += `<div>${loc(`${index}`) || index}: +${format((entry-1) * 100, 4, 'eng')}%`;
+    if(tags.study){
+      const studyPenalty = formulas.studyPenalty();
+      const sizeBonus = formulas.sizeBonus();
+      if(studyPenalty != 1){
+        result += `<div>Split focus: -${format((1-studyPenalty) * 100, 4, 'eng')}%</div>`;
       }
-    }
-    result += `<div class="statTitle">Multiplicative non-study modifiers</div>`;
-    for(let [index, entry] of Object.entries(statValues.value.jobEffect[refValues.value.showStat])){
-      if(entry !== 1){
-        result += `<div>${loc(`${index}`) || index}: +${format((entry-1) * 100, 4, 'eng')}%`;
+      if(sizeBonus != 1){
+        result += `<div>Size: +${format((sizeBonus-1) * 100, 4, 'eng')}%</div>`;
       }
     }
   }
@@ -272,7 +284,7 @@ const lastUnlocked = computed(() => {
   //items are unknown if not unlocked and hidden completely if there are no unlocked ones after it.
   const last = skillsOrder.findLastIndex((index) => skills.value[index].unlocked);
   return last;
-})
+});
 const nutrientsDesc = computed(() => {
   let desc = ``;
   const nutrients = formulas.nutrientGathering();
@@ -287,24 +299,62 @@ const nutrientsDesc = computed(() => {
     desc += loc('resDesc_nutrients_2', format(digestion / gameSpeed, 4, 'eng'))
   }
   return desc;
-})
-const rival1AttackInfo = computed(() => {
-  const rival = save.value.rivals.rival1;
-  if(rival.attacks){
-    if(rival.lastTarget === 'you'){
-      return loc('rival_desc_attack', format(rival.stolen, 4, 'eng'));
-    }
-    else if(rival.lastTarget === 'rival'){
-      return loc('rival_desc_attack_1', format(rival.stolen, 4, 'eng'));
-    }
-    else if(rival.lastTarget === 'fooled' && !statValues.value.jobTotal('mindControl')){
-      return loc('rival_desc_attack_2');
-    }
-    else if(rival.lastTarget === 'fooled'){
-      return loc('rival_desc_attack_3');
+});
+
+const selfInfo = computed(() => {
+  let content = '';
+  if(!refValues.value.rivalAttacks){
+    content += loc('self_status');
+  }
+  else if(!save.value.skills.attack.level){
+    content += loc('self_status_2');
+  }
+  else if(!refValues.value.rivalsAlive){
+    content += loc('self_status_3');
+  }
+  else{
+    content += loc('self_status_combat');
+    if(save.value.rivals.self.lastTarget){
+      content += `<br>${loc('self_status_combat_2', format(save.value.rivals.self.stolen, 4, 'eng'), loc(`${save.value.rivals.self.lastTarget}_name`))}`;
     }
   }
-  return '';
+  return content;
+});
+
+const rival1Info = computed(() => {
+  const rival = save.value.rivals.rival1;
+  let content = '';
+  if(!refValues.value.rivalAttacks){
+    content += loc('rival1_desc');
+  }
+  else if(save.value.rivals.rival1.alive){
+    content += loc('rival1_desc_alt');
+  }
+  else{
+    content += loc('rival_desc_dead');
+  }
+  if(rival.alive){
+    content += `<br>${loc('rival_mass', format(rival.size, 4, 'eng'))}`;
+    if(rival.attacks){
+      content += '<br>';
+      if(rival.lastTarget === 'you'){
+        content += loc('rival_desc_attack_self', format(rival.stolen, 4, 'eng'));
+      }
+      else if(rival.lastTarget === 'rival'){
+        content += loc('rival_desc_attack_rival', format(rival.stolen, 4, 'eng'));
+      }
+      else if(rival.lastTarget === 'fooled' && !statValues.value.effectTotal('mindControl')){
+        content += loc('rival_desc_attack_fooled');
+      }
+      else if(rival.lastTarget === 'fooled'){
+        content += loc('rival_desc_attack_fooled_2');
+      }
+      else if(rival.lastTarget === 'confused'){
+        content += loc('rival_desc_attack_confused');
+      }
+    }
+  }
+  return content;
 })
 const rival2Info = computed(() => {
   const rival = save.value.rivals.rival2;
@@ -312,89 +362,122 @@ const rival2Info = computed(() => {
   if(save.value.rivals.rival1.alive){
     content += loc('rival2_desc');
   }
-  else{
+  else if(rival.alive){
     content += loc('rival2_desc_2');
   }
-  if(rival.attacks){
-    content += '<br>';
-    if(rival.lastTarget === 'you'){
-      content += loc('rival_desc_attack', format(rival.stolen, 4, 'eng'));
-    }
-    else if(rival.lastTarget === 'rival'){
-      content += loc('rival_desc_attack_1', format(rival.stolen, 4, 'eng'));
-    }
-    else if(rival.lastTarget === 'fooled' && !statValues.value.jobTotal('mindControl')){
-      content += loc('rival_desc_attack_2');
-    }
-    else if(rival.lastTarget === 'fooled'){
-      content += loc('rival_desc_attack_3');
+  else{
+    content += loc('rival_desc_dead');
+  }
+  if(rival.alive){
+    content += `<br>${loc('rival_mass', format(rival.size, 4, 'eng'))}`;
+    if(rival.attacks){
+      content += '<br>';
+      if(rival.lastTarget === 'you'){
+        content += loc('rival_desc_attack_self', format(rival.stolen, 4, 'eng'));
+      }
+      else if(rival.lastTarget === 'rival'){
+        content += loc('rival_desc_attack_rival', format(rival.stolen, 4, 'eng'));
+      }
+      else if(rival.lastTarget === 'fooled' && !statValues.value.effectTotal('mindControl')){
+        content += loc('rival_desc_attack_fooled');
+      }
+      else if(rival.lastTarget === 'fooled'){
+        content += loc('rival_desc_attack_fooled_2');
+      }
+      else if(rival.lastTarget === 'confused'){
+        content += loc('rival_desc_attack_confused');
+      }
     }
   }
   return content;
 });
+const mimicColor = computed(() => {
+  const mimicPercent = save.value.rivals.self.mimicry >= refValues.value.rivals.self.mimicryMax;
+  const rival1AttackPercent = save.value.timers.rival1Attack / values.timers.rival1Attack;
+  const rival2AttackPercent = save.value.timers.rival2Attack / values.timers.rival2Attack;
+  if(mimicPercent >= 1){
+    return {
+      mimicRival1:(save.value.rivals.rival1.alive && rival1AttackPercent >= rival2AttackPercent),
+      mimicRival2:(save.value.rivals.rival2.alive &&rival2AttackPercent > rival1AttackPercent),
+    }
+  }
+  else{
+    return {};
+  }
+})
 </script>
 
 <template>
   <div class="sectionTop">
     <div class="stats">
-      <div v-if="save.skills.scouting.unlocked" class="resourceItem">
-        <ProgressBar v-if="save.misc.nutrAction === 'scouting'" :width="`${save.timers.nutrAction / values.timers.nutrAction * 100}%`" :background="'#225522'" />
-        <ProgressBar v-if="save.misc.nutrAction === 'digestion'" :width="`${100 - (save.timers.nutrAction / values.timers.nutrAction * 100)}%`" :background="'#444411'" />
-        <Tooltip :pos="'bottom'" :text="`${loc('resDesc_nutrients')}
+      <div class="resourceItem">
+        <ProgressBar v-if="save.misc.nutrAction === 'scouting'" :type="'bar'" :progress="(save.timers.nutrAction / values.timers.nutrAction * 100)" :color="'#225522'" />
+        <ProgressBar v-if="save.misc.nutrAction === 'digestion'" :type="'bar'" :progress="100 - (save.timers.nutrAction / values.timers.nutrAction * 100)" :color="'#444411'" />
+        <Tooltip :text="`${loc('resDesc_nutrients')}
         <br>${nutrientsDesc}`"/>
         <span class="front">{{ loc('res_nutrients', format(save.res.nutrients, 4, 'eng')) }}</span>
       </div>
-      <div v-if="save.skills.digestion.unlocked" class="resourceItem">
-        <Tooltip :pos="'bottom'" :text="`${loc('resDesc_size')}
+      <div class="resourceItem">
+        <Tooltip :text="`${loc('resDesc_size')}
         <br>${loc('resDesc_size_1', ((formulas.sizeBonus() - 1)*100).toFixed(0))}
-        <br>${loc('resDesc_size_2', format(formulas.digestToSizeEff() * 100, 4, 'eng'))}`"/>
+        ${save.skills.nutrientDigestion.level >= 1 ? `<br>${loc('resDesc_size_2', format(formulas.digestSizeGain(1) * 100, 4, 'eng'))}` : ''}
+        ${formulas.passiveSizeLoss() ? `<br>${loc('resDesc_size_3', format(formulas.passiveSizeLoss() / gameSpeed, 4, 'eng'))}` : ''}`"/>
         {{loc('res_size', format(save.res.size, 4, 'eng')) }}
       </div>
       <div class="resourceItem">
-        <Tooltip :pos="'bottom'" :text="`${loc('resDesc_focus')}
+        <Tooltip :text="`${loc('resDesc_focus')}
         <br>${loc('resDesc_focus_1')}
         <br>${loc('resDesc_focus_2', format(formulas.studyPenalty() * 100, 4, 'eng'))}`"/>
         {{loc('res_focus', format(study.max, 4, 'eng') - format(study.used, 4, 'eng'), format(study.max, 4, 'eng')) }}
       </div>
-      <div v-if="save.rivals.rival1.unlocked" class="resourceItem" @mouseover="refValues.rivals.rival1.warn=false" :class="{deadRival:!save.rivals.rival1.alive}">
-        <template v-if="!refValues.rivalAttacks">
-          <Tooltip :pos="'bottom'" :text="`${loc('rival1_desc')}`"/>
-          {{loc('rival1', format(save.rivals.rival1.size, 4, 'eng')) }}
-        </template>
-        <template v-else-if="save.rivals.rival1.alive">
-          <div class="warnNotif front" v-if="refValues.rivals.rival1.warn" :class="{neutral:save.rivals.rival1.lastTarget !== 'you'}">*</div> <!--notification star after an attack-->
-          <ProgressBar v-if="save.skills.rival1Study.level >= 5" :width="`${save.timers.rival1Attack / values.timers.rival1Attack * 100}%`" :background="'#552222'" />
-          <ProgressBar :width="`${Math.min(100, save.rivals.rival1.confuse * refValues.rivals.rival1.confuseMax)}%`" :background="'#FF55AA'" :style="{height:'10%', bottom:0}" />
-          <Tooltip :pos="'bottom'" :text="`${loc('rival1_desc_alt')}
-          <br>${rival1AttackInfo}`"/>
-          <span class="front">{{ loc('rival1_alt', format(save.rivals.rival1.size, 4, 'eng')) }}</span>
+      <!--<div class="resourceItem">
+        <template v-if="save.skills.attack.level >= 1 && refValues.rivalsAlive">
+          <Tooltip :text="`${loc('self_status_combat')}
+          ${save.rivals.self.lastTarget ? `<br>${loc('self_status_combat_2', format(save.rivals.self.stolen, 4, 'eng'), loc(`${save.rivals.self.lastTarget}_name`))}` : ''}`"/>
+          <ProgressBar :type="'bar'" :progress="save.timers.selfAttack / values.timers.selfAttack * 100" :color="'#225522'" />
+          <ProgressBar :type="'bar'" :progress="Math.min(100, save.rivals.self.mimicry * refValues.rivals.self.mimicryMax)" :color="'#CCCCCC'" :style="{height:'10%', bottom:0}" />
+          <span class="front">{{ "Status" }}</span>
         </template>
         <template v-else>
-          <Tooltip :pos="'bottom'" :text="`${loc('rival_desc_dead')}`"/>
-          <span class="front">{{ loc('rival_dead') }}</span>
+          <Tooltip :text="`${loc(refValues.rivalsAlive ? 'self_status' : 'self_status_2')}`"/>
+          <span class="front">{{ "Status" }}</span>
         </template>
       </div>
-      <div v-if="save.skills.attack.level >= 1" class="resourceItem">
-        <Tooltip :full="true" :pos="'bottom'" :text="`${loc('self_combat_desc')}
-        <!--<br>${format(save.timers.selfAttack, 4, 'eng')}/${values.timers.selfAttack}-->
-        ${save.rivals.self.lastTarget ? `<br>${loc('self_combat_desc_2', format(save.rivals.self.stolen, 4, 'eng'), loc(`${save.rivals.self.lastTarget}_name`))}` : ''}`"/>
-        <ProgressBar :width="`${save.timers.selfAttack / values.timers.selfAttack * 100}%`" :background="'#225522'" />
-        <ProgressBar :width="`${Math.min(100, save.rivals.self.mimicry * refValues.rivals.self.mimicryMax)}%`" :background="'#CCCCCC'" :style="{height:'10%', bottom:0}" />
-        <span class="front">{{ "Combat timer" }}</span>
-      </div>
-      <div v-if="save.rivals.rival2.unlocked" class="resourceItem" @mouseover="refValues.rivals.rival2.warn=false" :class="{deadRival:!save.rivals.rival2.alive}">
-        <template v-if="save.rivals.rival2.alive">
-          <div class="warnNotif front" v-if="refValues.rivals.rival2.warn" :class="{neutral:save.rivals.rival2.lastTarget !== 'you'}">*</div> <!--notification star after an attack-->
-          <ProgressBar v-if="save.skills.rival2Study.level >= 5" :width="`${save.timers.rival2Attack / values.timers.rival2Attack * 100}%`" :background="'#552222'" />
-          <ProgressBar :width="`${Math.min(100, save.rivals.rival2.confuse * refValues.rivals.rival2.confuseMax)}%`" :background="'#FF55AA'" :style="{height:'10%', bottom:0}" />
-          <Tooltip :pos="'bottom'" :text="`${rival2Info}`"/>
-          <span class="front">{{loc('rival2', format(save.rivals.rival2.size, 4, 'eng')) }}</span>
+      <div class="resourceItem" @mouseover="refValues.rivals.rival1.warn=false" :class="{deadRival:!save.rivals.rival1.alive}">
+        <template v-if="save.rivals.rival1.unlocked">
+          <template v-if="!refValues.rivalAttacks">
+            <Tooltip :text="`${loc('rival1_desc')}`"/>
+            {{loc('rival1', format(save.rivals.rival1.size, 4, 'eng')) }}
+          </template>
+          <template v-else-if="save.rivals.rival1.alive">
+            <div class="warnNotif front" v-if="refValues.rivals.rival1.warn" :class="{neutral:save.rivals.rival1.lastTarget !== 'you'}">*</div>
+            <ProgressBar v-if="save.skills.rival1Study.level >= 15" :type="'bar'" :progress="save.timers.rival1Attack / values.timers.rival1Attack * 100" :color="'#552222'" />
+            <ProgressBar :type="'bar'" :progress="Math.min(100, save.rivals.rival1.confuse * refValues.rivals.rival1.confuseMax)" :color="'#FF55AA'" :style="{height:'10%', bottom:0}" />
+            <Tooltip :text="`${loc('rival1_desc_alt')}
+            <br>${rival1Info}`"/>
+            <span class="front">{{ loc('rival1_alt', format(save.rivals.rival1.size, 4, 'eng')) }}</span>
+          </template>
+          <template v-else>
+            <Tooltip :text="`${loc('rival_desc_dead')}`"/>
+            <span class="front">{{ loc('rival_dead') }}</span>
+          </template>
         </template>
-        <template v-else>
-          <Tooltip :pos="'bottom'" :text="`${loc('rival_desc_dead')}`"/>
-          <span class="front">{{ loc('rival_dead') }}</span>
-        </template>
       </div>
+      <div class="resourceItem" @mouseover="refValues.rivals.rival2.warn=false" :class="{deadRival:!save.rivals.rival2.alive}">
+        <template v-if="save.rivals.rival2.unlocked">
+          <template v-if="save.rivals.rival2.alive">
+            <div class="warnNotif front" v-if="refValues.rivals.rival2.warn" :class="{neutral:save.rivals.rival2.lastTarget !== 'you'}">*</div>
+            <ProgressBar v-if="save.skills.rival2Study.level >= 15" :type="'bar'" :progress="save.timers.rival2Attack / values.timers.rival2Attack * 100" :color="'#552222'" />
+            <ProgressBar :type="'bar'" :progress="Math.min(100, save.rivals.rival2.confuse * refValues.rivals.rival2.confuseMax)" :color="'#FF55AA'" :style="{height:'10%', bottom:0}" />
+            <Tooltip :text="`${rival2Info}`"/>
+            <span class="front">{{loc('rival2', format(save.rivals.rival2.size, 4, 'eng')) }}</span>
+          </template>
+          <template v-else>
+            <Tooltip :text="`${loc('rival_desc_dead')}`"/>
+            <span class="front">{{ loc('rival_dead') }}</span>
+          </template>
+        </template>
+      </div>-->
     </div>
     <div class="menu">
       <div>
@@ -427,8 +510,8 @@ const rival2Info = computed(() => {
         </div>
       </div>
       <div>
-        <div class="button style-1" @click="console.log(statValues.allSkills())">
-          Print skill effects
+        <div class="button style-1" @click="skillLockByTag('basic');">
+          Lock/unlock all basic skills
         </div>
       </div>
       <div>
@@ -446,15 +529,52 @@ const rival2Info = computed(() => {
   <div class="sectionMain">
     <div class="innerLeft">
       <template v-if="refValues.screen === 'game'">
+        <div class="slimes">
+          <div class="self slime">
+            <div class="body" :style="{width:`${save.res.size ** 0.75}px`}" :class="mimicColor">
+              <div class="attackProgress">
+                <ProgressBar :type="'circle'" :progress="save.timers.selfAttack / values.timers.selfAttack * 100" :color="'green'" :style="{opacity:0.3}"></ProgressBar>
+                <ProgressBar :type="'line-circle'" :progress="save.rivals.self.mimicry / refValues.rivals.self.mimicryMax * 100" :color="'#CCCCCC'" :lineWidth="5" :style="{opacity:0.5}"></ProgressBar>
+                
+                <Tooltip :text="selfInfo"/>
+              </div>
+            </div>
+          </div>
+          <div v-show="save.rivals.rival1.unlocked" class="rival1 slime">
+            <div class="body" :style="{width:`${save.rivals.rival1.size ** 0.75}px`}" :class="{dead:!save.rivals.rival1.alive}">
+              <div class="attackProgress">
+                <ProgressBar v-if="save.skills.rival1Study.level >= 15" :type="'circle'" :progress="save.timers.rival1Attack / values.timers.rival1Attack * 100" :color="'#882222'" :style="{opacity:0.5}"></ProgressBar>
+                <ProgressBar :type="'line-circle'" :progress="save.rivals.rival1.confuse / refValues.rivals.rival1.confuseMax * 100" :color="'#FF55AA'" :lineWidth="5" :style="{opacity:0.5}"></ProgressBar>
+                
+                <Tooltip :text="rival1Info"/>
+                <template v-if="save.rivals.rival1.alive && false">
+                  <div class="warnNotif front" v-if="refValues.rivals.rival1.warn" :class="{neutral:save.rivals.rival1.lastTarget !== 'you'}">*</div> <!--notification star after an attack-->
+                </template>
+              </div>
+            </div>
+          </div>
+          <div v-show="save.rivals.rival2.unlocked" class="rival2 slime">
+            <div class="body" :style="{width:`${save.rivals.rival2.size ** 0.75}px`}" :class="{dead:!save.rivals.rival2.alive}">
+              <div class="attackProgress">
+                <ProgressBar v-if="save.skills.rival2Study.level >= 15" :type="'circle'" :progress="save.timers.rival2Attack / values.timers.rival2Attack * 100" :color="'#882222'" :style="{opacity:0.5}"></ProgressBar>
+                <ProgressBar :type="'line-circle'" :progress="save.rivals.rival2.confuse / refValues.rivals.rival2.confuseMax * 100" :color="'#FF55AA'" :lineWidth="5" :style="{opacity:0.5}"></ProgressBar>
+                
+                <Tooltip :text="rival2Info"/>
+                <template v-if="save.rivals.rival2.alive && false">
+                  <div class="warnNotif front" v-if="refValues.rivals.rival2.warn" :class="{neutral:save.rivals.rival2.lastTarget !== 'you'}">*</div> <!--notification star after an attack-->
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
       </template>
       <template v-else-if="refValues.screen === 'settings'">
       </template>
       <template v-else-if="refValues.screen === 'stats'">
         <div style="display:flex; flex-direction:column">
             <div class="statsItem button style-1" :class="{selected:(refValues.showStat === key)}" v-for="(value, key) in values.stats" :key="key" @click="refValues.showStat = key;">
-            <Tooltip :pos="'right'" :text="`Base: ${statValues.baseEffectMods(key)}<br>
-            Mult: ${statValues.EffectMods(key)}<br>
-            Scaling: ${statValues.creepTotal(key) * 100}%`">
+            <Tooltip :text="`Base: ${statValues.baseEffectMods(key)}<br>
+            Mult: ${statValues.effectMods(key)}`">
             </Tooltip>
             {{ loc(`stat_${key}`) }}
             </div>

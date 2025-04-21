@@ -1,4 +1,4 @@
-import {saveValues, values, study, statValues, skills, skillsOrder} from './Values.js';
+import {saveValues, values, study, statValues, initRefValues, skills, updateSkills, skillsOrder} from './Values.js';
 import {deepClone, mergeDeep} from './Functions.js';
 import {ref} from 'vue';
 import * as lzString from 'lz-string';
@@ -82,16 +82,17 @@ export function initSave(){
     //for(let [index, entry] of rivals){
     //}
 }
-export function initGame(){
+export function initGame(reset=false){
     initSave();
     statValues.value.initialize(values.stats, skills.value);
-    loadGame();
-    for(let [index, entry] of Object.entries(skills.value)){
-      entry.update(true); //update stats immediately on page load.
+    if(!reset){
+        loadGame();
     }
+    initRefValues();
+    updateSkills(true); //update stats immediately on page load.
 }
 export function resetGame(){
-    initSave();
+    initSave(true);
 }
 export function exportGame(){
     const elem = document.getElementById("saveArea");

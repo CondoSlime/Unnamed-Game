@@ -30,7 +30,7 @@
 .sectionTop{
     height:90px;
     flex-shrink:0;
-    border-bottom:1px solid #888;
+    border-bottom:1px solid #888888;
     display:flex;
     justify-content:space-between;
     .stats{
@@ -40,13 +40,19 @@
         flex-flow:column wrap;
         /*justify-content:space-around;*/
     }
+    .stats > *:nth-child(2n+1){
+        border-bottom:1px solid #888888;
+    }
+    .stats > *:nth-child(2n){
+        border-top:1px solid #888888;
+    }
     .resourceItem{
         padding:0 30px;
         font-size:1.4rem;
         min-width:250px;
         /*height:33.4%;*/
         overflow:hidden;
-        border-right:1px solid #000;
+        border-right:1px solid #888888;
         border-left:1px solid transparent;
         flex-basis:50%;
         display:flex;
@@ -100,6 +106,195 @@
     height:100%;
     overflow-y:scroll;
 }
+.slimes{
+    overflow:hidden;
+    width:100%;
+    height:100%;
+    position:relative;
+}
+.slime{
+    position:absolute;
+    --rotVar:0deg;
+}
+.slime > *{
+    position:absolute;
+    transform:translate(-50%, -50%);
+    top:50%;
+    left:50%;
+}
+.slime > .body{
+    transform-origin:0% 0%;
+    transform:rotate(var(--rotVar)) translate(-50%, -50%);
+    border-radius:100%;
+    aspect-ratio:1/1;
+    transition: background 5s;
+    max-width:250px;
+    min-width:20px;
+}
+.slime > .dead{
+    background:#232323;
+    border:2px solid #666666;
+}
+.self{
+    top:150px;
+    left:50%;
+}
+.self .body.mimicRival1{
+    background:#233023;
+}
+.self .body.mimicRival2{
+    background:#302323;
+}
+.self .body{
+    background:#121212;
+    border:1px solid #666666;
+    animation: slimeAnim 60s infinite;
+}
+.rival1{
+    top:300px;
+    left:15%;
+    --rotVar:30deg;
+}
+.rival1 .body:not(.dead){
+    background:#233023;
+    border:1px solid #666666;
+    animation: slimeAnim 60s infinite 5s;
+}
+.rival2{
+    top:350px;
+    left:72%;
+    --rotVar:-45deg;
+}
+.rival2 .body:not(.dead){
+    background:#302323;
+    border:1px solid #666666;
+    animation: slimeAnim 60s infinite 15s;
+}
+.attackProgress{
+    min-width:50px;
+    max-width:100px;
+    width:90%;
+    aspect-ratio:1/1;
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%, -50%) rotate(calc(0deg - calc(var(--rotVar))));
+}
+.test{
+    background-image:radial-gradient(circle, transparent 50%, #fff 50%, #fff 100%);
+    /*background:radial-gradient(circle at 50%, #fff, #fff 50%, transparent 50%, transparent 100%);*/
+}
+/*.self::after{
+    content:'';
+    background:#121212;
+    display:block;
+    width:100%;
+    height:100%;
+    border-radius:100%;
+    border:1px solid #666666;
+    transform:translate(-50%, -50%);
+    animation: slimeAnimEaseOut 10s infinite;
+}*/
+/*
+translate(+ >, +, v)
+translate(- <, -, ^)
+*/
+@keyframes slimeAnim {
+    0% {
+        transform:rotate(var(--rotVar)) translate(-50%, -50%);
+    }
+    10% {
+        transform:rotate(var(--rotVar)) translate(-44%, -46%) scale(1.01, 1);
+    }
+    20% {
+        transform:rotate(var(--rotVar)) translate(-48%, -44%) scale(1.015, 1.01);
+    }
+    30% {
+        transform:rotate(var(--rotVar)) translate(-52%, -48%) scale(1.017, 1.015);
+    }
+    40% {
+        transform:rotate(var(--rotVar)) translate(-56%, -52%) scale(1.012, 1.08);
+    }
+    45% {
+        transform:rotate(var(--rotVar)) translate(-58%, -54%) scale(1.008, 1.04);
+    }
+    50% {
+        transform:rotate(var(--rotVar)) translate(-56%, -56%) scale(0.998, 1.02);
+    }
+    60% {
+        transform:rotate(var(--rotVar)) translate(-52%, -57%) scale(0.99, 1);
+    }
+    65% {
+        transform:rotate(var(--rotVar)) translate(-50%, -55%) scale(0.985, 1.01);
+    }
+    70% {
+        transform:rotate(var(--rotVar)) translate(-47%, -57%) scale(0.98, 0.995);
+    }
+    80% {
+        transform:rotate(var(--rotVar)) translate(-45%, -54%) scale(0.975, 0.985);
+    }
+    90% {
+        transform:rotate(var(--rotVar)) translate(-47%, -56%) scale(0.985, 1);
+    }
+    94% {
+        transform:rotate(var(--rotVar)) translate(-46%, -53%) scale(1, 1.02);
+    }
+    97% {
+        transform:rotate(var(--rotVar)) translate(-48%, -51%) scale(1.01, 1.01);
+    }
+    100% {
+        transform:rotate(var(--rotVar)) translate(-50%, -50%) scale(1, 1);
+    }
+}
+/*@keyframes slimeAnim {
+    0% {
+        transform:rotate(var(--rotVar)) translate(0%, 0%);
+    }
+    10% {
+        transform:rotate(var(--rotVar)) translate(6%, 4%) scale(1.01, 1);
+    }
+    20% {
+        transform:rotate(var(--rotVar)) translate(2%, 6%) scale(1.015, 1.01);
+    }
+    30% {
+        transform:rotate(var(--rotVar)) translate(2%, 2%) scale(1.017, 1.015);
+    }
+    40% {
+        transform:rotate(var(--rotVar)) translate(6%, -2%) scale(1.012, 1.08);
+    }
+    45% {
+        transform:rotate(var(--rotVar)) translate(8%, -4%) scale(1.008, 1.04);
+    }
+    50% {
+        transform:rotate(var(--rotVar)) translate(6%, -6%) scale(0.998, 1.02);
+    }
+    60% {
+        transform:rotate(var(--rotVar)) translate(2%, -7%) scale(0.99, 1);
+    }
+    65% {
+        transform:rotate(var(--rotVar)) translate(0%, -5%) scale(0.985, 1.01);
+    }
+    70% {
+        transform:rotate(var(--rotVar)) translate(3%, -7%) scale(0.98, 0.995);
+    }
+    80% {
+        transform:rotate(var(--rotVar)) translate(5%, -4%) scale(0.975, 0.985);
+    }
+    90% {
+        transform:rotate(var(--rotVar)) translate(3%, -6%) scale(0.985, 1);
+    }
+    94% {
+        transform:rotate(var(--rotVar)) translate(4%, -3%) scale(1, 1.02);
+    }
+    97% {
+        transform:rotate(var(--rotVar)) translate(2%, -1%) scale(1.01, 1.01);
+    }
+    100% {
+        transform:rotate(var(--rotVar)) translate(0%, 0%) scale(1, 1);
+    }
+}*/
+
+
 .innerMain{
     flex:1;
 }
@@ -146,6 +341,9 @@
     .saveArea{ max-width:600px; width:100%; max-height:200px; height:100%; display:block; margin:15px; }
 }
 
+.dark{
+    color:#000000;
+}
 .front{
     z-index:10;
 }

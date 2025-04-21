@@ -1,5 +1,5 @@
 import {deepClone, format} from './Functions.js';
-import {statValues, values, skills} from './Values.js';
+import {statValues, values, refValues, skills} from './Values.js';
 import {save} from './Save.js';
 
 
@@ -7,6 +7,11 @@ export class skill{
     constructor(id, tags, types, expMax, scaling, effects, maxLevel=-1, description=function(){return `Description`}, unlockCondition=function(){return true}, visibleCondition=function(){return false}, lockedHoverDesc=""){
         this.id = id;
         this.tags = tags;
+        for(let [index, entry] of Object.entries(types)){
+            if(!values.stats[index].study){
+                console.warn(`Used non-study stat ${index} for skill ${id}`);
+            }
+        }
         this.types = types;
         this.expMax = expMax;
         this.maxLevel = maxLevel; //maximum level. Level can not go higher than this amount. Skill becomes automatically unfocused when this happens, -1 means no cap.
@@ -123,12 +128,24 @@ export class skill{
         //check if upgrade becomes unlocked
         //skills with the 'relock' tag can become locked again which disables their bonuses but keeps exp and levels
         let update = force;
-        if((this.tags.includes('relock') && this.unlocked !== this.unlockCondition()) || 
-        (!this.unlocked && this.unlockCondition())){
-            this.unlocked = this.unlockCondition();
-            update = true;
+        let tagLock = false;
+        for(let i=0;i<this.tags.length; i++){
+            const tag = this.tags[i];
+            if(refValues.value.tagLock.includes(tag)){
+                this.unlocked = false;
+                tagLock = true;
+                update = true;
+                break;
+            }
         }
-        else if(this._level !== this.level){
+        if(!tagLock){
+            if((this.tags.includes('relock') && this.unlocked !== this.unlockCondition()) || 
+            (!this.unlocked && this.unlockCondition())){
+                this.unlocked = this.unlockCondition();
+                update = true;
+            }
+        }
+        if(this._level !== this.level){
             update = true;
         }
         const skillEffect = statValues.value.skillEffectTotal(this.id);
@@ -149,9 +166,9 @@ export class skill{
         let time = 0;
         let result = 0;
         for(let [index, entry] of Object.entries(this.types)){
-            time += this.required() / statValues.value.studyTotal(index) * entry;
+            time += 1 / statValues.value.effectTotal(index) * entry;
         }
-        result = this.required() / time;
+        result = 1 / time;
         for(let i=0;i<this.tags.length;i++){ //apply speed modifiers that are dependent to this item's tags.
             result *= statValues.value.skillTagStudyMods(this.tags[i]);
         }

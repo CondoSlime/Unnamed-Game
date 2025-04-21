@@ -1,4 +1,5 @@
 import data from './loc.json';
+const warnings = [];
 export default function loc(key, ...vars){
     const mods = {};
     let result = data[key];
@@ -6,7 +7,10 @@ export default function loc(key, ...vars){
         if(mods.silent){
             return undefined;
         }
-        console.log("Error. Loc string", key, "not found");
+        if(!warnings.includes(key)){
+            warnings.push(key);
+            console.log("Error. Loc string", key, "not found");
+        }
         return JSON.stringify(key);
     }
     for (let i=0; i<vars.length; i++){ //stolen from Evolve
