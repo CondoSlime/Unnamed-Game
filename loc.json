@@ -85,7 +85,7 @@
     "skill_advancedStudy":"Advanced Study",
     "skill_hibernation":"Hibernation",
 
-    "skillDesc_exampleSkill":"This skill is used in the guide to explain what skills are.",
+    "skillDesc_exampleSkill":"Skill description",
     "skillDesc_test2":"This skill affects the effect of the previous skill",
     "skillDesc_test3":"This skill levels up very fast",
     "skillDesc_test4":"This skill affects the effect of most skills",
@@ -166,11 +166,16 @@
     "guide_basics_5":"Each skill has its own set of stats that affect speed. These are displayed as \"required stats\". A higher stat means a higher speed.",
     "guide_basics_6":"It pays to boost lower stats as having a single low dependent stat can greatly reduce the amount of EXP gain. More on this is explained in another part.",
     "guide_basics_7":"Skills boost a variety of effects. These effects can boost stats by a flat amount, or a multiplier, which is multiplicative with other sources.",
-    "guide_basics_8":"Skills can also boost the effect of other skills. This is done either by directly affecting a skill, or affecting all skills that match a specific tag.",
+    "guide_basics_8":"Skills can boost the effect of other skills directly, boosting the values of the affected skill. Skill-boosting effects always have a color to indicate what kind of skills it affects.",
+    "guide_basics_9":"%0 effects simply target a specific skill. while %1 effects affect all skills that share that same %1.",
 
 
 
     "effect_deceased_rival1":"Intraguild Predation (rival1)",
     "effect_deceased_rival2":"Intraguild Predation (rival2)",
-    "base":"Base"
+    "base":"Base",
+    "skill":"Skill",
+    "skillEffect":"Skill Effect",
+    "tag":"Tag",
+    "tagEffect":"Tag Effect"
 }

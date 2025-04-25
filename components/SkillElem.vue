@@ -35,10 +35,10 @@ const fakeRequired = computed(() => {
 </script>
 
 <template>
-    <div v-if="!skill.fake && skill.unlocked" class="studyElem" :class="{active:study.order.includes(skill.id)}" @click="study.switch(skill.id)" :style="style">
+    <div v-if="!skill.fake && skill.unlocked" class="skillElem" :class="{active:study.order.includes(skill.id)}" @click="study.switch(skill.id)" :style="style">
       <Tooltip :text="skill.hasOwnProperty('description') ? skill.description() : ''" :img="skill.src" />
       <div class="inner">
-        <div class="studyTop">
+        <div class="skillTop">
           <div class="activator">
             <div class="activator-skill"></div>
           </div>
@@ -46,9 +46,9 @@ const fakeRequired = computed(() => {
           <div class="level" v-if="!skill.capped">{{format(skill.level, 4, 'eng')}}</div>
           <div class="level capped" v-else>{{format(skill.maxLevel, 4, 'eng')}}</div>
         </div>
-      <div class="studyCenter">
+      <div class="skillCenter">
       </div>
-      <div class="studyBottom">
+      <div class="skillBottom">
         <template v-if="skill.levelSpeed > 0.5 && study.order.includes(skill.id)">
           <Progressbar :type="'bar'" :color="'#774444'" :progress="100"></Progressbar>
           <div class="progressText">{{format(skill.levelSpeed, 4, 'eng')}}/s</div>
@@ -64,13 +64,13 @@ const fakeRequired = computed(() => {
       </div>
     </div>
   </div>
-  <div v-else-if="!skill.unlocked" class="studyElem locked">
+  <div v-else-if="!skill.unlocked" class="skillElem locked">
     <div>?</div>
   </div>
-  <div v-else-if="skill.fake && skill.unlocked" class="studyElem fake" :class="{active:activated}" :style="style" @click="activated = !activated">
+  <div v-else-if="skill.fake && skill.unlocked" class="skillElem fake" :class="{active:activated}" :style="style" @click="activated = !activated">
     <Tooltip :text="skill.hasOwnProperty('description') ? skill.description() : ''" :img="skill.src" />
     <div class="inner">
-      <div class="studyTop">
+      <div class="skillTop">
         <div class="activator">
           <div class="activator-skill"></div>
         </div>
@@ -78,9 +78,9 @@ const fakeRequired = computed(() => {
         <div class="level" v-if="!skill.capped">{{format(skill.level, 4, 'eng')}}</div>
         <div class="level capped" v-else>{{format(skill.maxLevel, 4, 'eng')}}</div>
       </div>
-      <div class="studyCenter">
+      <div class="skillCenter">
       </div> <!-- Fake skill that's just used to be shown visually. -->
-      <div class="studyBottom">
+      <div class="skillBottom">
         <template v-if="skill.levelSpeed > 0.5">
           <Progressbar :type="'bar'" :color="'#774444'" :progress="100"></Progressbar>
           <div class="progressText">{{format(skill.levelSpeed, 4, 'eng')}}/s</div>
@@ -104,11 +104,11 @@ const fakeRequired = computed(() => {
     height:100%;
     border-radius:inherit;
 }
-.studyTop{
+.skillTop{
     display:flex;
     height:60%;
 }
-.studyElem{
+.skillElem{
   transition: box-shadow 3s;
 }
 .activator{
@@ -124,10 +124,10 @@ const fakeRequired = computed(() => {
     border-radius:3px;
 }
 .active .activator-skill{
-    background:#444400;
+    background:var(--focus-color);
 }
 .active{
-  box-shadow:0 0 10px 3px #444400;
+  box-shadow:0 0 10px 3px var(--focus-color);
 }
 .title{
     width:calc(100%/6*4);
@@ -146,13 +146,13 @@ const fakeRequired = computed(() => {
     flex-shrink:0;
 }
 .level.capped{
-  color:#CCCC99;
+  color:var(--capped-color);
 }
-.studyCenter{
+.skillCenter{
     display:flex;
     height:0%;
 }
-.studyBottom{
+.skillBottom{
     height:40%;
     position:relative;
 }

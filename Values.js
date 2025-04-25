@@ -285,12 +285,15 @@ function seededRandom(adv=true) {
 export const refValuesBase = { //do not modify
   stats:deepClone(values.stats),
   tagLock:[],
-  misc:{
+  settings:{
     infoMode:'guide',
     showGuide:'',
     showStat:'',
     showSkill:'',
     screen:'game',
+    pause:false
+  },
+  misc:{
     rival1Warn:false,
     rival2Warn:false,
   },

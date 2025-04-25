@@ -1,13 +1,13 @@
 <script setup>
 import loc from '../Localization.js';
-import StudyElem from './StudyElem.vue';
+import StudyElem from './SkillElem.vue';
 import images from '../Images.js';
 import img from './images/Skill_hover_explanation.png';
 const props = defineProps(['id']);
 console.log(images);
 const exampleSkill = {
     id:'exampleSkill',
-    tags:['tags'],
+    tags:['basic', 'ability'],
     types:{locomotion:0.5, senses:0.5},
     expMax:100,
     scaling:1.05,
@@ -36,15 +36,20 @@ console.log(img);
     <div>{{ loc('guide_basics_4') }}</div>
     <div style="display:inline-block;">
       <div style="position:relative;">
-        <img src="./images/Skill_explanation.png" style="width:100%; height:100%; position:absolute; top:0; left:0; z-index:1;">
         <StudyElem :skill="exampleSkill" :fake="true" :style="{marginTop:`10px`}"></StudyElem>
       </div>
-      <img src="./images/Skill_hover_explanation.png" style="margin:15px auto; display:block;">
+      <div class="tooltip" style="position:static; display:inline-block; margin:10px;">
+        {{loc('skillDesc_exampleSkill')}}<br>
+        <span class="tag">{{ loc('tag_basic') }}</span> <span class="tag">{{ loc('tag_ability') }}</span><br>
+        <span class="stat">{{ loc('stat_locomotion') }}</span>: 50% <span class="stat">{{ loc('stat_senses') }}</span>: 50%<br>
+        {{loc('stat_memory')}}: +3 {{loc('stat_memory')}}: +30% {{loc('stat_memory')}}: +3
+      </div>
     </div>
     <div>{{ loc('guide_basics_5') }}</div>
     <div>{{ loc('guide_basics_6') }}</div>
     <div>{{ loc('guide_basics_7') }}</div>
     <div>{{ loc('guide_basics_8') }}</div>
+    <div v-html="loc('guide_basics_9', `<span class='skill'>${loc('skill')}</span>`, `<span class='tag'>${loc('tag')}</span>`)"></div>
   </div>
   <template v-else>
     <div>Template ID {{ props.id }} not found!</div>

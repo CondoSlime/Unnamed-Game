@@ -18,10 +18,59 @@
     background:#181818;
     color:rgba(235, 235, 235, .64);
 }
+.main{
+    height:100vh;
+    width:100vw;
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    color:var(--text-color);
+}
+
+.main{
+    --text-color:#EEEEEE;
+    --sectionTop-background:#181818;
+    --sectionTop-border:#888888;
+    --sectionLeft-background:#181818;
+    --sectionMain-background:#181818;
+    --resource-border:#888888;
+    --style-1-background:#999999;
+    --style-1-color:#000000;
+    --style-1-border:#888888;
+    --style-1-selected-background:#666666;
+    --skillElem-background:#444444;
+    --skillElem-border:#777777;
+    --skillElem-color:#EEEEEE;
+    --skillElem-locked-background:#222222;
+    --skill-color:#AAAACC;
+    --tag-color:#CCCC99;
+    --stat-color:#99CC99;
+    --capped-color:#CCCC99;
+    --tooltip-background:#000000;
+    --tooltip-text:#FFFFFF;
+    --tooltip-border:#BBBBBB;
+    --focus-color:#444400;
+    --progressBar-color-progression:#225522;
+    --progressBar-color-digestion:#444411;
+    --progressBar-color-skill:#552222;
+    --progressBar-color-skill-fast:#774444;
+    --progressBar-color-combat-rival:#552222;
+    --progressBar-color-combat-self:#00FF00;
+    --progressBar-color-confusion:#882222;
+    --progressBar-color-mimicry:#CCCCCC;
+    --statsItem-border:#666666;
+    --deceasedRival-background:#232323;
+    --deceasedRival-border:#666666;
+    --rival1-background:#233023;
+    --rival2-background:#302323;
+    --self-background:#121212;
+    --slime-border:#666666;
+}
+
 .TText{
-    background:#000;
-    border:2px solid #BBB;
-    color:#fff;
+    background:var(--tooltip-background);
+    border:2px solid var(--tooltip-border);
+    color:var(--tooltip-color);
     border-radius:2px;
     padding:10px;
     line-height:1.2;
@@ -30,7 +79,8 @@
 .sectionTop{
     height:90px;
     flex-shrink:0;
-    border-bottom:1px solid #888888;
+    background:var(--sectionTop-background);
+    border-bottom:1px solid var(--sectionTop-border);
     display:flex;
     justify-content:space-between;
     .stats{
@@ -41,10 +91,10 @@
         /*justify-content:space-around;*/
     }
     .stats > *:nth-child(2n+1){
-        border-bottom:1px solid #888888;
+        border-bottom:1px solid var(--resource-border);
     }
     .stats > *:nth-child(2n){
-        border-top:1px solid #888888;
+        border-top:1px solid var(--resource-border);
     }
     .resourceItem{
         padding:0 30px;
@@ -52,7 +102,7 @@
         min-width:250px;
         /*height:33.4%;*/
         overflow:hidden;
-        border-right:1px solid #888888;
+        border-right:1px solid var(--resource-border);
         border-left:1px solid transparent;
         flex-basis:50%;
         display:flex;
@@ -60,7 +110,7 @@
         position:relative;
     }
     .menu{
-        width:300px;
+        width:400px;
         height:100%;
         display:flex;
         flex-wrap:wrap;
@@ -70,7 +120,7 @@
     .menu > div{
         padding:2px;
         height:calc(100%/3);
-        width:calc(100%/3);
+        width:calc(100%/4);
     }
     .menu > div > div{
         height:100%;
@@ -78,6 +128,19 @@
         align-items:center;
         justify-content:center;
     }
+}
+.button{
+    cursor:pointer;
+    position:relative;
+}
+.button.style-1{
+    background: var(--style-1-background);
+    border: 1px solid var(--style-1-border);
+    color:var(--style-1-color);
+    text-align: center;
+}
+.button.style-1:hover, .button.style-1:focus, .button.style-1.selected{
+    background:var(--style-1-selected-background);
 }
 .showStats{
     text-align:center;
@@ -93,7 +156,8 @@
     display:flex;
     justify-content:center;
     background:#555;
-    border:2px solid #222;
+    color:var(--stat-color);
+    border:2px solid var(--statsItem-border);
 }
 .sectionMain{
     min-height:0;
@@ -132,22 +196,22 @@
     min-width:20px;
 }
 .slime > .dead{
-    background:#232323;
-    border:2px solid #666666;
+    background:var(--deceasedRival-background);
+    border:2px solid var(--deceasedRival-border);
 }
 .self{
     top:150px;
     left:50%;
 }
 .self .body.mimicRival1{
-    background:#233023;
+    background: var(--rival1-background);
 }
 .self .body.mimicRival2{
-    background:#302323;
+    background:var(--rival2-background);
 }
 .self .body{
-    background:#121212;
-    border:1px solid #666666;
+    background:var(--self-background);
+    border:1px solid var(--slime-border);
     animation: slimeAnim 60s infinite;
 }
 .rival1{
@@ -156,8 +220,8 @@
     --rotVar:30deg;
 }
 .rival1 .body:not(.dead){
-    background:#233023;
-    border:1px solid #666666;
+    background:var(--rival1-background);
+    border:1px solid var(--slime-border);
     animation: slimeAnim 60s infinite 5s;
 }
 .rival2{
@@ -166,8 +230,8 @@
     --rotVar:-45deg;
 }
 .rival2 .body:not(.dead){
-    background:#302323;
-    border:1px solid #666666;
+    background:var(--rival2-background);
+    border:1px solid var(--slime-border);
     animation: slimeAnim 60s infinite 15s;
 }
 .attackProgress{
@@ -305,9 +369,9 @@ translate(- <, -, ^)
     align-content:flex-start;
     height:100%;
 }
-.studyElem{
-    border:1px solid #777777;
-    background:#444444;
+.skillElem{
+    border:1px solid var(--skillElem-border);
+    background:var(--skillElem-background);
     border-radius:5px;
     height:30vh;
     min-height:80px;
@@ -317,12 +381,12 @@ translate(- <, -, ^)
     width:300px;
     cursor:pointer;
 }
-.studyElem:not(.fake){
+.skillElem:not(.fake){
     margin:25px;
 }
-.studyElem.fake{ height:999px; }
-.studyElem.locked{
-    background:#222222;
+.skillElem.fake{ height:999px; }
+.skillElem.locked{
+    background:var(--skillElem-locked-background);
     display:flex;
     align-items:center;
     justify-content:center;
@@ -351,28 +415,15 @@ translate(- <, -, ^)
     z-index:10;
 }
 .skill{
-    color:#AAAACC;
+    color:var(--skill-color);
 }
 .tag{
-    color:#CCCC99;
+    color:var(--tag-color);
 }
 .stat{
-    color:#99CC99;
+    color:var(--stat-color);
 }
 
-.button{
-    cursor:pointer;
-    position:relative;
-}
-.button.style-1{
-    background: #999;
-    border: 1px solid #444;
-    color: #000;
-    text-align: center;
-}
-.button.style-1:hover, .button.style-1:focus, .button.style-1.selected{
-    background:#666;
-}
 .warnNotif{
     position:absolute;
     transform:translate(-50%, -50%);
@@ -387,16 +438,4 @@ translate(- <, -, ^)
 .statTitle{
     font-size:1.2rem;
     margin-top:20px;
-}
-.deadRival{
-    background:#444444;
-    color:#888888;
-    /*background: linear-gradient(45deg, transparent 49%, 
-        #552222 49%, 
-        #552222 51%,  
-        transparent 51%),
-    linear-gradient(-45deg, transparent 49%, 
-        #552222 49%, 
-        #552222 51%,  
-        transparent 51%);*/
 }
