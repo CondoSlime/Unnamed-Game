@@ -283,12 +283,17 @@ function seededRandom(adv=true) {
   return result;
 }
 export const refValuesBase = { //do not modify
-  rival1Warn:false,
-  rival2Warn:false,
-  screen:'game',
-  showStat:'',
   stats:deepClone(values.stats),
   tagLock:[],
+  misc:{
+    infoMode:'guide',
+    showGuide:'',
+    showStat:'',
+    showSkill:'',
+    screen:'game',
+    rival1Warn:false,
+    rival2Warn:false,
+  },
   rivals:{
     rival1:{
       size:values.rivals.rival1.baseSize,
@@ -433,6 +438,11 @@ export const formulas = {
   }
 }
 
+export const guides = {
+  basics:{
+    unlock:function(){return true}
+  }
+}
 
 export const study = ref({
   get max(){return statValues.value.effectTotal('focus')},

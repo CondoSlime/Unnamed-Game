@@ -314,10 +314,13 @@ translate(- <, -, ^)
     max-height:100px;
     position:relative;
     overflow:hidden;
-    margin:25px;
     width:300px;
     cursor:pointer;
 }
+.studyElem:not(.fake){
+    margin:25px;
+}
+.studyElem.fake{ height:999px; }
 .studyElem.locked{
     background:#222222;
     display:flex;

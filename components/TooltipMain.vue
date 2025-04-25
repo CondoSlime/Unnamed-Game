@@ -2,6 +2,7 @@
 import {ref, onUpdated, useTemplateRef, watch} from 'vue'
 import {tooltipContent as TT} from './Tooltip.js';
 const tooltipElem = useTemplateRef('elem');
+const imgElem = useTemplateRef('img');
 const leftPos = ref(0);
 const topPos = ref(0);
 let update = false;
@@ -21,10 +22,9 @@ const recalc = () => {
 }*/
 
 onUpdated(() => { //update tooltip size on text change. Runs after text placed in tooltip.
-  /*if(compareText !== props.text){
-    compareText = props.text; //only update if text is different to prevent infinite loop.
-    recalc();
-  }*/
+  updatePos();
+})
+function updatePos(){
   if(update){
     update--;
     if(TT.value.originElem instanceof Element){
@@ -51,7 +51,6 @@ onUpdated(() => { //update tooltip size on text change. Runs after text placed i
       if(leftPos.value < 0){
         leftPos.value = 0;
       }*/
-     
       const width = tooltipElem.value.clientWidth;
       const height = tooltipElem.value.clientHeight;
       topPos.value = rect.top - TTrect.height - 10;
@@ -70,14 +69,19 @@ onUpdated(() => { //update tooltip size on text change. Runs after text placed i
       }
     }
   }
-})
+}
 watch((TT.value), () => {
   update = 2; //update twice to ensure dimensions and placement are correct.
+  //TT.value.focus = false;
 })
 </script>
 
 <template>
-  <div ref="elem" class="tooltip" :class="[TT.pos, TT.class]" v-show="TT.content" v-html="TT.content" :style="{left:`${leftPos}px`, top:`${topPos}px`}"></div>
+  <div v-if="TT.img" ref="elem" class="tooltipImg" :class="TT.class" :style="{left:`${leftPos}px`, top:`${topPos}px`}">
+    <img ref="img" :src="TT.img" @load="update=2; updatePos()">
+  </div>
+  <div v-else ref="elem" class="tooltip" :class="TT.class" v-show="TT.content" v-html="TT.content" :style="{left:`${leftPos}px`, top:`${topPos}px`}">
+  </div>
 </template>
 
 <style>
@@ -90,6 +94,11 @@ watch((TT.value), () => {
   z-index:1001;
   pointer-events:none;
   word-break:keep-all;
+}
+.tooltipImg{
+  position:absolute;
+  z-index:1001;
+  pointer-events:none;
 }
 /*.tooltip.top{ transform:translate(0, -10px); }
 .tooltip.right{ transform:translate(10px, 0); }

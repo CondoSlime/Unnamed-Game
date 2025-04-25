@@ -3,11 +3,12 @@ import StudyElem from './components/StudyElem.vue';
 import Tooltip from './components/Tooltip.vue';
 import TooltipMain from './components/TooltipMain.vue';
 import ProgressBar from './components/Progressbar.vue';
+import Guide from './components/Guides.vue';
 import {ref, onMounted, onUnmounted, computed} from 'vue';
 import {save, initGame, saveGame, loadGame, exportGame, importGame, resetGame} from './Save.js';
 import {format} from './Functions.js';
 import loc from './Localization.js';
-import {statValues, skills, skillsOrder, values, refValues, initRefValues, skillLockByTag, study, formulas} from './Values.js';
+import {statValues, skills, guides, skillsOrder, values, refValues, initRefValues, skillLockByTag, study, formulas} from './Values.js';
 
 /*save.stats = deepClone(entry);
 save.rivals = deepClone(rivalsBase);
@@ -209,12 +210,13 @@ function checkValues(){ //check state of values. Run once on page load too.
     const currRival = save.value.rivals[rivalName];
     if(currRival.size <= 0){
       save.value.rivals[rivalName].alive = false;
-      save.value.rivals[rivalName].confuse = 0;
-      save.value.timers[`${rivalName}Attack`] = 0;
     }
     if(!currRival.alive){ //dead rivals grant a bonus to nutrients
       statValues.value.effect.scouting[`effect_deceased_${rivalName}`] = 1.5;
       statValues.value.effect.nutrientDigestion[`effect_deceased_${rivalName}`] = 1.5;
+      save.value.rivals[rivalName].confuse = 0;
+      save.value.timers[`${rivalName}Attack`] = 0;
+      save.value.rivals[rivalName].size = 0;
     }
     else{
       delete statValues.value.effect.scouting[`effect_deceased_${rivalName}`];
@@ -244,13 +246,14 @@ function autoSave(){
 const statRows = computed(() => {
   //stat breakdown
   let result = '';
-  if(refValues.value.showStat){
-    result += `<div style="font-size:1.5rem;">${loc(`stat_${refValues.value.showStat}`)}</div>`;
-    const tags = refValues.value.stats[refValues.value.showStat];
-    result += `<div style="font-size:1.5rem;">${loc(`statDesc_${refValues.value.showStat}`)}</div>`;
-    result += `<div style="font-size:1.35rem;">Total: ${format(statValues.value.effectTotal(refValues.value.showStat), 4, 'eng')}</div>`;
+  const stat = refValues.value.misc.showStat;
+  if(stat){
+    result += `<div style="font-size:1.5rem;">${loc(`stat_${stat}`)}</div>`;
+    const tags = refValues.value.stats[stat];
+    result += `<div style="font-size:1.5rem;">${loc(`statDesc_${stat}`)}</div>`;
+    result += `<div style="font-size:1.35rem;">Total: ${format(statValues.value.effectTotal(stat), 4, 'eng')}</div>`;
     result += `<div class="statTitle">Base modifiers</div>`;
-    for(let [index, entry] of Object.entries(statValues.value.baseEffect[refValues.value.showStat])){
+    for(let [index, entry] of Object.entries(statValues.value.baseEffect[stat])){
       /*if(index === 'base'){
         result += `<div>Base: ${entry}</div>`;
       }
@@ -262,7 +265,7 @@ const statRows = computed(() => {
       }
     }
     result += `<div class="statTitle">Multiplicative modifiers</div>`;
-    for(let [index, entry] of Object.entries(statValues.value.effect[refValues.value.showStat])){
+    for(let [index, entry] of Object.entries(statValues.value.effect[stat])){
       if(entry !== 1){
         result += `<div>${loc(`${index}`) || index}: +${format((entry-1) * 100, 4, 'eng')}%`;
       }
@@ -481,10 +484,10 @@ const mimicColor = computed(() => {
     </div>
     <div class="menu">
       <div>
-        <div class="button style-1" :class="{selected:refValues.screen === 'stats'}" @click="refValues.screen = (refValues.screen !== 'stats' ? 'stats' : 'game')">Stats</div>
+        <div class="button style-1" :class="{selected:refValues.misc.screen === 'stats'}" @click="refValues.misc.screen = (refValues.misc.screen !== 'stats' ? 'stats' : 'game')">Stats</div>
       </div>
       <div>
-        <div class="button style-1" :class="{selected:refValues.screen === 'settings'}" @click="refValues.screen = (refValues.screen !== 'settings' ? 'settings' : 'game')">Settings</div>
+        <div class="button style-1" :class="{selected:refValues.misc.screen === 'settings'}" @click="refValues.misc.screen = (refValues.misc.screen !== 'settings' ? 'settings' : 'game')">Settings</div>
       </div>
       <div>
         <div class="button style-1" @click="save.timers.rival1Attack=values.timers.rival1Attack">
@@ -528,7 +531,7 @@ const mimicColor = computed(() => {
   </div>
   <div class="sectionMain">
     <div class="innerLeft">
-      <template v-if="refValues.screen === 'game'">
+      <template v-if="refValues.misc.screen === 'game'">
         <div class="slimes">
           <div class="self slime">
             <div class="body" :style="{width:`${save.res.size ** 0.75}px`}" :class="mimicColor">
@@ -568,37 +571,51 @@ const mimicColor = computed(() => {
           </div>
         </div>
       </template>
-      <template v-else-if="refValues.screen === 'settings'">
+      <template v-else-if="refValues.misc.screen === 'settings'">
       </template>
-      <template v-else-if="refValues.screen === 'stats'">
+      <template v-else-if="refValues.misc.screen === 'stats'">
+        <div style="display:flex; flex-wrap:wrap; align-items:center; padding:10px 0 20px 0;">
+          <div style="min-width:100px;" class="button style-1" :class="{selected:refValues.misc.infoMode === 'guide'}"  @click="refValues.misc.infoMode = 'guide'">Guide</div>
+          <div style="min-width:100px;" class="button style-1" :class="{selected:refValues.misc.infoMode === 'stats'}"  @click="refValues.misc.infoMode = 'stats'">Stats</div>
+          <div style="min-width:100px;" class="button style-1" :class="{selected:refValues.misc.infoMode === 'skills'}" @click="refValues.misc.infoMode = 'skills'">Skills</div>
+        </div>
         <div style="display:flex; flex-direction:column">
-            <div class="statsItem button style-1" :class="{selected:(refValues.showStat === key)}" v-for="(value, key) in values.stats" :key="key" @click="refValues.showStat = key;">
-            <Tooltip :text="`Base: ${statValues.baseEffectMods(key)}<br>
-            Mult: ${statValues.effectMods(key)}`">
-            </Tooltip>
-            {{ loc(`stat_${key}`) }}
+            <div v-if="refValues.misc.infoMode === 'guide'" class="statsItem button style-1" :class="{selected:(refValues.misc.showGuide === key)}" v-for="(value, key) in guides" :key="key" @click="refValues.misc.showGuide = key;">
+              {{ loc(`guide_${key}`) }}
+            </div>
+            <div v-if="refValues.misc.infoMode === 'stats'" class="statsItem button style-1" :class="{selected:(refValues.misc.showStat === key)}" v-for="(value, key) in values.stats" :key="key" @click="refValues.misc.showStat = key;">
+              {{ loc(`stat_${key}`) }}
+            </div>
+            <div v-if="refValues.misc.infoMode === 'skills'" class="statsItem button style-1" :class="{selected:(refValues.misc.showSkill === key)}" v-for="(value, key) in skills" :key="key" @click="refValues.misc.showSkill = key;">
+              {{ loc(`skill_${key}`) }}
             </div>
         </div>
       </template>
       <template v-else>
-        <div style="font-size:3rem; color:red;">Invalid setting: {{ refValues.screen }}</div>
+        <div style="font-size:3rem; color:red;">Invalid setting: {{ refValues.misc.screen }}</div>
       </template>
     </div>
     <div class="innerMain">
-      <div class="skills" v-if="refValues.screen === 'game'">
+      <div class="skills" v-if="refValues.misc.screen === 'game'">
         <template v-for="(item, index) in skillsOrder">
           <StudyElem v-if="lastUnlocked >= index" :key="skills[item].id" :skill="skills[item]" :study="study"/>
         </template>
       </div>
-      <div class="settings" v-else-if="refValues.screen === 'settings'">
+      <div class="settings" v-else-if="refValues.misc.screen === 'settings'">
         <textarea id="saveArea" class="saveArea"></textarea>
         <div class="button style-1" @click="saveGame()">Save Game</div>
         <div class="button style-1" @click="exportGame()">Export Save</div>
         <div class="button style-1" @click="importGame()">Import Save</div>
         <div class="button style-1" @click="resetGame()">Reset Save</div>
       </div>
-      <template v-else-if="refValues.screen === 'stats'">
-        <div class="showStats" v-if="refValues.showStat" v-html="statRows"></div>
+      <template v-else-if="refValues.misc.screen === 'stats'">
+        <div v-if="refValues.misc.infoMode === 'stats' && refValues.misc.showStat" class="showStats" v-html="statRows"></div>
+        <div v-else-if="refValues.misc.infoMode === 'skills' && refValues.misc.showSkill" class="showStats">
+          skill info goes here
+        </div>
+        <template v-else-if="refValues.misc.infoMode === 'guide' && refValues.misc.showGuide" class="showStats">
+          <Guide :id="refValues.misc.showGuide"/>
+        </template>
       </template>
     </div>
   </div>
