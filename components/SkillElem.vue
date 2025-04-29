@@ -42,7 +42,7 @@ const fakeRequired = computed(() => {
           <div class="activator">
             <div class="activator-skill"></div>
           </div>
-          <div class="title skill">{{loc(`skill_${skill.id}`)}}</div>
+          <div class="title skill">{{loc(`skill_${skill.id}`)}} <span class="danger" v-if="skill.tags.includes('danger')">!</span></div>
           <div class="level" v-if="!skill.capped">{{format(skill.level, 4, 'eng')}}</div>
           <div class="level capped" v-else>{{format(skill.maxLevel, 4, 'eng')}}</div>
         </div>

@@ -1,4 +1,4 @@
-import {saveValues, values, study, statValues, initRefValues, skills, updateSkills, skillsOrder} from './Values.js';
+import {saveValues, values, study, statValues, updateStage, initRefValues, skills, updateSkills, skillsOrder} from './Values.js';
 import {deepClone, mergeDeep} from './Functions.js';
 import {ref} from 'vue';
 import * as lzString from 'lz-string';
@@ -33,44 +33,54 @@ export function saveGame(){
 	window.localStorage.setItem("unnamed-project", lzString.compressToBase64(JSON.stringify(save.value)));
 }
 export function loadGame(result=false){
+    let decoded = false;
     if(result){
-        save.value = result
+        decoded = result;
     }
     else{
         const localStorage = window.localStorage.getItem("unnamed-project");
         if(localStorage){
-            const decoded = JSON.parse(lzString.decompressFromBase64(localStorage));
-            save.value = mergeDeep(deepClone(saveValues), deepClone(decoded));
-            for(let [index, entry] of Object.entries(skills.value)){
-                if(!save.value.skills[index]){
-                    save.value.skills[index] = {exp:0, level:0, unlocked:false, enabled:false};
-                }
+            decoded = JSON.parse(lzString.decompressFromBase64(localStorage));
+        }
+    }
+    if(decoded){
+        save.value = mergeDeep(deepClone(saveValues), deepClone(decoded));
+        /*for(let [index, entry] of Object.entries(skills.value)){
+            if(!save.value.skills[index]){
+                save.value.skills[index] = {exp:0, level:0, unlocked:false, enabled:false};
             }
-            /*for(let [index, entry] of Object.entries(values.stats)){
-                console.log(index);
-                if(!save.value.skills[index]){
-                    save.value.skills[index] = decoded.stats[index];
-                }
-            }*/
-            /*save.value.rivals = deepClone(decoded.rivals);
-            save.value.study = deepClone(decoded.study);
-            save.value.settings = deepClone(decoded.settings);*/
-            for(let i=0;i<save.value.study.order.length; i++){
-                const id = save.value.study.order[i];
-                if(!save.value.skills[id].unlocked){
-                    study.value.switch(id);
-                }
+        }*/
+        /*for(let [index, entry] of Object.entries(values.stats)){
+            console.log(index);
+            if(!save.value.skills[index]){
+                save.value.skills[index] = decoded.stats[index];
+            }
+        }*/
+        /*save.value.rivals = deepClone(decoded.rivals);
+        save.value.study = deepClone(decoded.study);
+        save.value.settings = deepClone(decoded.settings);*/
+        for(let [index, entry] of Object.entries(save.value.skills)){
+            if(skills.value[index]){
+                skills.value[index].level = entry.level;
+                skills.value[index].exp = entry.exp;
+                skills.value[index].unlocked = entry.unlocked;
             }
         }
+        for(let i=0;i<save.value.study.order.length; i++){
+            const id = save.value.study.order[i];
+            if(!skills.value[id] || !skills.value[id].unlocked){
+                study.value.switch(id);
+            }
+        }
+    }
+    else{
+        //console.warn('something went wrong loading the save file!');
     }
 }
 export function initSave(){
     //save.value.res = deepClone(saveValues.res);
     save.value = deepClone(saveValues);
     save.value.skills = {};
-    for(let [index, entry] of Object.entries(skills.value)){
-        save.value.skills[index] = {exp:0, level:0, unlocked:false, enabled:false};
-    }
     /*for(let [index, entry] of Object.entries(saveValues.stats)){
         save.value.stats[index] = entry;
     }*/
@@ -89,6 +99,7 @@ export function initGame(reset=false){
         loadGame();
     }
     initRefValues();
+    updateStage();
     updateSkills(true); //update stats immediately on page load.
 }
 export function resetGame(){

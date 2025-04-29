@@ -19,6 +19,10 @@ export class skill{
         this.levelSpeed = 0 //amount of average levels that this skill gains per second. Used for progress bar animations
         this.scaling = scaling;
         this.effects = effects;
+        this.unlocked = false;
+        this.exp = 0;
+        this.level = 0;
+        this.lockLevel = 0; //lockLevel = 0 = no special properties. lockLevel = 1 = considered locked regardless of unlock condition. lockLevel = 2 = effect of lockLevel 1 + skill does not show up at all.
         this.description = description;
         this.unlockCondition = unlockCondition;
         this.visibleCondition = visibleCondition; //condition for when skill should become visible pre-emptively. This happens regardless to skills of which another skill higher in the order is unlocked. A visible skill does not cause other lower order skills to become visible.
@@ -129,21 +133,38 @@ export class skill{
         //skills with the 'relock' tag can become locked again which disables their bonuses but keeps exp and levels
         let update = force;
         let tagLock = false;
+        let lockLevel = this.lockLevel;
+        const mustHaveTags = deepClone(refValues.value.noTagLock);
         for(let i=0;i<this.tags.length; i++){
             const tag = this.tags[i];
             if(refValues.value.tagLock.includes(tag)){
-                this.unlocked = false;
                 tagLock = true;
-                update = true;
-                break;
+            }
+            if(mustHaveTags.includes(tag)){
+                mustHaveTags.splice(mustHaveTags.indexOf(tag), 1);
             }
         }
-        if(!tagLock){
+        if(mustHaveTags.length){
+            tagLock = true;
+        }
+        if(tagLock){
+            this.lockLevel = 2;
+        }
+        else{
+            this.lockLevel = 0;
+        }
+        if(!this.lockLevel){
             if((this.tags.includes('relock') && this.unlocked !== this.unlockCondition()) || 
             (!this.unlocked && this.unlockCondition())){
                 this.unlocked = this.unlockCondition();
                 update = true;
             }
+        }
+        else{
+            this.unlocked = false;
+        }
+        if(this.lockLevel !== lockLevel){
+            update = true;
         }
         if(this._level !== this.level){
             update = true;
@@ -195,12 +216,12 @@ export class skill{
         }
         return mult;
     }
-    get exp(){ return save.value.skills[this.id].exp }
+    /*get exp(){ return save.value.skills[this.id].exp }
     set exp(val){ save.value.skills[this.id].exp = val; }
     get level(){ return save.value.skills[this.id].level }
     set level(val){ save.value.skills[this.id].level = val; }
     get unlocked(){ return save.value.skills[this.id].unlocked; }
-    set unlocked(val){ save.value.skills[this.id].unlocked = val; }
+    set unlocked(val){ save.value.skills[this.id].unlocked = val; }*/
     get capped(){return this.maxLevel != -1 && this.level >= this.maxLevel}
     get scaleEffect(){
         //multiplier to amount of exp needed for the next level

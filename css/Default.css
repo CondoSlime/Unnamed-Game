@@ -29,6 +29,9 @@
 
 .main{
     --text-color:#EEEEEE;
+    --text-dark:#000000;
+    --text-danger:#BB2222;
+    --sectionTop-border:#888888;
     --sectionTop-background:#181818;
     --sectionTop-border:#888888;
     --sectionLeft-background:#181818;
@@ -66,6 +69,16 @@
     --self-background:#121212;
     --slime-border:#666666;
 }
+.main.stage1{
+    --sectionTop-background:#181818;
+    --sectionLeft-background:#181818;
+    --sectionMain-background:#181818;
+}
+.main.stage2{
+    --sectionTop-background:#201919;
+    --sectionLeft-background:#201919;
+    --sectionMain-background:#201919;
+}
 
 .TText{
     background:var(--tooltip-background);
@@ -79,8 +92,8 @@
 .sectionTop{
     height:90px;
     flex-shrink:0;
-    background:var(--sectionTop-background);
     border-bottom:1px solid var(--sectionTop-border);
+    background:var(--sectionTop-background);
     display:flex;
     justify-content:space-between;
     .stats{
@@ -132,16 +145,29 @@
 .button{
     cursor:pointer;
     position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
 }
-.button.style-1{
+.inline-button{
+    cursor:pointer;
+    position:relative;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+}
+.button.style-1, .inline-button.style-1{
     background: var(--style-1-background);
     border: 1px solid var(--style-1-border);
     color:var(--style-1-color);
-    text-align: center;
 }
-.button.style-1:hover, .button.style-1:focus, .button.style-1.selected{
+.button.style-1:hover, .button.style-1:focus, .button.style-1.selected,
+.inline-button.style-1:hover, .inline-button.style-1:focus, .inline-button.style-1.selected{
     background:var(--style-1-selected-background);
 }
+.flex-center{ display:flex; align-items:center; justify-content:center; }
+.inline-flex-center{ display:inline-flex; align-items:center; justify-content:center; }
+.full{ width:100%; height:100%; }
 .showStats{
     text-align:center;
     overflow-y:auto;
@@ -169,6 +195,7 @@
     width:100%;
     height:100%;
     overflow-y:scroll;
+    background:var(--sectionLeft-background);
 }
 .slimes{
     overflow:hidden;
@@ -361,6 +388,7 @@ translate(- <, -, ^)
 
 .innerMain{
     flex:1;
+    background:var(--sectionMain-background);
 }
 .skills{
     display:flex;
@@ -404,25 +432,16 @@ translate(- <, -, ^)
     height:100%;
     width:100%;
     float:left;
-    .button{ width:160px; margin:0 15px; display:inline-block; padding:10px 0px;}
+    .inline-button{ width:160px; margin:0 15px; padding:10px 0px;}
     .saveArea{ max-width:600px; width:100%; max-height:200px; height:100%; display:block; margin:15px; }
 }
 
-.dark{
-    color:#000000;
-}
-.front{
-    z-index:10;
-}
-.skill{
-    color:var(--skill-color);
-}
-.tag{
-    color:var(--tag-color);
-}
-.stat{
-    color:var(--stat-color);
-}
+.front{ z-index:10; }
+.dark{ color:#000000; }
+.skill{ color:var(--skill-color); }
+.tag{ color:var(--tag-color); }
+.stat{ color:var(--stat-color); }
+.danger{ color:var(--text-danger); }
 
 .warnNotif{
     position:absolute;
@@ -439,3 +458,9 @@ translate(- <, -, ^)
     font-size:1.2rem;
     margin-top:20px;
 }
+.guide{
+    padding:30px;
+    overflow-y:auto;
+    height:100%;
+}
+.guide > *{margin-bottom:10px;}
