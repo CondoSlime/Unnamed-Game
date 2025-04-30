@@ -66,8 +66,8 @@ export function loadGame(result=false){
                 skills.value[index].unlocked = entry.unlocked;
             }
         }
-        for(let i=0;i<save.value.study.skillOrder.length; i++){
-            const id = save.value.study.skillOrder[i];
+        for(let i=0;i<save.value.study.skill.order.length; i++){
+            const id = save.value.study.skill.order[i];
             if(!skills.value[id] || !skills.value[id].unlocked){
                 study.value.switchSkill(id);
             }
