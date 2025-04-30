@@ -1,4 +1,4 @@
-import {saveValues, values, study, statValues, updateStage, initRefValues, skills, updateSkills, skillsOrder} from './Values.js';
+import {saveValues, values, study, statValues, updateStage, initRefValues, skills, structures, updateSkills, skillsOrder} from './Values.js';
 import {deepClone, mergeDeep} from './Functions.js';
 import {ref} from 'vue';
 import * as lzString from 'lz-string';
@@ -66,10 +66,10 @@ export function loadGame(result=false){
                 skills.value[index].unlocked = entry.unlocked;
             }
         }
-        for(let i=0;i<save.value.study.order.length; i++){
-            const id = save.value.study.order[i];
+        for(let i=0;i<save.value.study.skillOrder.length; i++){
+            const id = save.value.study.skillOrder[i];
             if(!skills.value[id] || !skills.value[id].unlocked){
-                study.value.switch(id);
+                study.value.switchSkill(id);
             }
         }
     }
@@ -94,7 +94,7 @@ export function initSave(){
 }
 export function initGame(reset=false){
     initSave();
-    statValues.value.initialize(values.stats, skills.value);
+    statValues.value.initialize(values.stats, skills.value, structures.value);
     if(!reset){
         loadGame();
     }

@@ -35,134 +35,65 @@ const fakeRequired = computed(() => {
 </script>
 
 <template>
-    <div v-if="!skill.fake && skill.unlocked" class="skillElem" :class="{active:study.order.includes(skill.id)}" @click="study.switch(skill.id)" :style="style">
-      <Tooltip :text="skill.hasOwnProperty('description') ? skill.description() : ''" :img="skill.src" />
-      <div class="inner">
-        <div class="skillTop">
-          <div class="activator">
-            <div class="activator-skill"></div>
-          </div>
-          <div class="title skill">{{loc(`skill_${skill.id}`)}} <span class="danger" v-if="skill.tags.includes('danger')">!</span></div>
-          <div class="level" v-if="!skill.capped">{{format(skill.level, 4, 'eng')}}</div>
-          <div class="level capped" v-else>{{format(skill.maxLevel, 4, 'eng')}}</div>
+  <div v-if="!skill.fake && skill.unlocked" class="studyElem skillElem" :class="{active:study.order('skill').includes(skill.id)}" @click="study.switch('skill', skill.id)" :style="style">
+    <Tooltip :text="skill.hasOwnProperty('description') ? skill.description() : ''" :img="skill.src" />
+    <div class="inner">
+      <div class="studyTop">
+        <div class="activator">
+          <div class="activator-study"></div>
         </div>
-      <div class="skillCenter">
+        <div class="title skill">{{loc(`skill_${skill.id}`)}} <span class="danger" v-if="skill.tags.includes('danger')">!</span></div>
+        <div class="level" v-if="!skill.capped">{{format(skill.level, 4, 'eng')}}</div>
+        <div class="level capped" v-else>{{format(skill.maxLevel, 4, 'eng')}}</div>
       </div>
-      <div class="skillBottom">
-        <template v-if="skill.levelSpeed > 0.5 && study.order.includes(skill.id)">
-          <Progressbar :type="'bar'" :color="'#774444'" :progress="100"></Progressbar>
+      <div class="sstudyCenter">
+      </div>
+      <div class="studyBottom">
+        <template v-if="skill.levelSpeed > 0.5 && study.order('skill').includes(skill.id)">
+          <Progressbar :type="'bar'" :class="'fast'" :progress="100"></Progressbar>
           <div class="progressText">{{format(skill.levelSpeed, 4, 'eng')}}/s</div>
         </template>
         <template v-else-if="skill.capped">
-          <Progressbar :type="'bar'" :color="'#552222'" :progress="100"></Progressbar>
+          <Progressbar :type="'bar'" :class="'fast'" :progress="100"></Progressbar>
           <div class="progressText">MAX</div>
         </template>
         <template v-else>
-          <Progressbar :type="'bar'" :color="'#552222'" :progress="lingeringExpBar"></Progressbar>
+          <Progressbar :type="'bar'" :progress="lingeringExpBar"></Progressbar>
           <div class="progressText">{{format(skill.exp, 4, 'eng')}}/{{format(skill.required(), 4, 'eng')}}</div>
         </template>
       </div>
     </div>
   </div>
-  <div v-else-if="!skill.unlocked" class="skillElem locked">
+  <div v-else-if="!skill.unlocked" class="studyElem locked">
     <div>?</div>
   </div>
-  <div v-else-if="skill.fake && skill.unlocked" class="skillElem fake" :class="{active:activated}" :style="style" @click="activated = !activated">
+  <div v-else-if="skill.fake && skill.unlocked" class="studyElem fake skillElem" :class="{active:activated}" :style="style" @click="activated = !activated">
     <Tooltip :text="skill.hasOwnProperty('description') ? skill.description() : ''" :img="skill.src" />
     <div class="inner">
-      <div class="skillTop">
+      <div class="studyTop">
         <div class="activator">
-          <div class="activator-skill"></div>
+          <div class="activator-study"></div>
         </div>
-        <div class="title skill">{{loc(`skill_${skill.id}`)}}</div>
+        <div class="title study">{{loc(`skill_${skill.id}`)}}</div>
         <div class="level" v-if="!skill.capped">{{format(skill.level, 4, 'eng')}}</div>
         <div class="level capped" v-else>{{format(skill.maxLevel, 4, 'eng')}}</div>
       </div>
-      <div class="skillCenter">
+      <div class="studyCenter">
       </div> <!-- Fake skill that's just used to be shown visually. -->
-      <div class="skillBottom">
+      <div class="studyBottom">
         <template v-if="skill.levelSpeed > 0.5">
-          <Progressbar :type="'bar'" :color="'#774444'" :progress="100"></Progressbar>
+          <Progressbar :type="'bar'" :class="'fast'" :progress="100"></Progressbar>
           <div class="progressText">{{format(skill.levelSpeed, 4, 'eng')}}/s</div>
         </template>
         <template v-else-if="skill.capped">
-          <Progressbar :type="'bar'" :color="'#552222'" :progress="100"></Progressbar>
+          <Progressbar :type="'bar'" :class="'fast'" :progress="100"></Progressbar>
           <div class="progressText">MAX</div>
         </template>
         <template v-else>
-          <Progressbar :type="'bar'" :color="'#552222'" :progress="lingeringExpBar"></Progressbar>
+          <Progressbar :type="'bar'" :progress="lingeringExpBar"></Progressbar>
           <div class="progressText">{{format(skill.exp, 4, 'eng')}}/{{format(fakeRequired, 4, 'eng')}}</div>
         </template>
       </div>
     </div>
   </div>
 </template>
-
-<style>
-.inner{
-    overflow:hidden;
-    height:100%;
-    border-radius:inherit;
-}
-.skillTop{
-    display:flex;
-    height:60%;
-}
-.skillElem{
-  transition: box-shadow 3s;
-}
-.activator{
-    width:calc(100%/6);
-    display:flex;
-    align-items:center;
-    padding-left:10px;
-}
-.activator-skill{
-    height:40px;
-    aspect-ratio:1/1;
-    border:1px solid #777777;
-    border-radius:3px;
-}
-.active .activator-skill{
-    background:var(--focus-color);
-}
-.active{
-  box-shadow:0 0 10px 3px var(--focus-color);
-}
-.title{
-    width:calc(100%/6*4);
-    font-size:1.2rem;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-}
-.level{
-    width:calc(100%/6);
-    word-break:break-all;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size:1.2rem;
-    flex-shrink:0;
-}
-.level.capped{
-  color:var(--capped-color);
-}
-.skillCenter{
-    display:flex;
-    height:0%;
-}
-.skillBottom{
-    height:40%;
-    position:relative;
-}
-.progressText{
-    height:100%;
-    width:100%;
-    position:absolute;
-    z-index:1;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-}
-</style>

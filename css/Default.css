@@ -44,7 +44,8 @@
     --skillElem-background:#444444;
     --skillElem-border:#777777;
     --skillElem-color:#EEEEEE;
-    --skillElem-locked-background:#222222;
+    --studyElem-locked-background:#222222;
+    --structureElem-background:radial-gradient(#444450, #444444);
     --skill-color:#AAAACC;
     --tag-color:#CCCC99;
     --stat-color:#99CC99;
@@ -52,15 +53,19 @@
     --tooltip-background:#000000;
     --tooltip-text:#FFFFFF;
     --tooltip-border:#BBBBBB;
-    --focus-color:#444400;
+    --focus-skill-color:#444400;
+    --focus-structure-color:radial-gradient(#7777DD, #BBBBFF);
     --progressBar-color-progression:#225522;
     --progressBar-color-digestion:#444411;
     --progressBar-color-skill:#552222;
     --progressBar-color-skill-fast:#774444;
-    --progressBar-color-combat-rival:#552222;
+    --progressBar-color-structure:#5555AA;
+    --progressBar-color-structure-fast:#7777CC;
+    --progressBar-color-combat-rival:#882222;
     --progressBar-color-combat-self:#00FF00;
-    --progressBar-color-confusion:#882222;
+    --progressBar-color-confusion:#FF55AA;
     --progressBar-color-mimicry:#CCCCCC;
+    --progressBar-color-exploration:linear-gradient(#9999FF, #CCCCFF);
     --statsItem-border:#666666;
     --deceasedRival-background:#232323;
     --deceasedRival-border:#666666;
@@ -68,6 +73,9 @@
     --rival2-background:#302323;
     --self-background:#121212;
     --slime-border:#666666;
+
+    --exploreBarText-color-1:#000000;
+    --exploreBarText-color-2:#FFFFFF;
 }
 .main.stage1{
     --sectionTop-background:#181818;
@@ -389,17 +397,22 @@ translate(- <, -, ^)
 .innerMain{
     flex:1;
     background:var(--sectionMain-background);
-}
-.skills{
     display:flex;
-    flex-wrap:wrap;
-    overflow-y:auto;
-    align-content:flex-start;
-    height:100%;
+    flex-direction:column;
+    .areas{
+        min-height:30px;
+        width:100%;
+    }
+    .skills{
+        display:flex;
+        flex:1;
+        flex-wrap:wrap;
+        overflow-y:auto;
+        align-content:flex-start;
+    }
 }
-.skillElem{
-    border:1px solid var(--skillElem-border);
-    background:var(--skillElem-background);
+
+.studyElem{
     border-radius:5px;
     height:30vh;
     min-height:80px;
@@ -408,13 +421,103 @@ translate(- <, -, ^)
     overflow:hidden;
     width:300px;
     cursor:pointer;
+    .inner{
+        overflow:hidden;
+        height:100%;
+        border-radius:inherit;
+    }
+    .studyTop{
+        display:flex;
+        height:60%;
+    }
+    .studyElem{
+      transition: box-shadow 3s;
+    }
+    .activator{
+        width:calc(100%/6);
+        display:flex;
+        align-items:center;
+        padding-left:10px;
+    }
+    .activator-study{
+        height:40px;
+        aspect-ratio:1/1;
+        border:1px solid #777777;
+        border-radius:3px;
+    }
+    .active{
+      box-shadow:0 0 10px 3px var(--focus-color);
+    }
+    .title{
+        width:calc(100%/6*4);
+        font-size:1.2rem;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+    }
+    .level{
+        width:calc(100%/6);
+        word-break:break-all;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:1.2rem;
+        flex-shrink:0;
+    }
+    .level.capped{
+      color:var(--capped-color);
+    }
+    .studyCenter{
+        display:flex;
+        height:0%;
+    }
+    .studyBottom{
+        height:40%;
+        position:relative;
+    }
+    .progressText{
+        height:100%;
+        width:100%;
+        position:absolute;
+        z-index:1;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+    }
 }
-.skillElem:not(.fake){
+.skillElem{
+    background:var(--skillElem-background);
+    border:1px solid var(--skillElem-border);
+    &.active .activator-study{
+        background:var(--focus-skill-color);
+    }
+    .progressBar{
+        background:var(--progressBar-color-skill);
+    }
+    .progressBar.fast{
+        background:var(--progressBar-color-skill-fast);
+    }
+}
+.structureElem{
+    background:var(--structureElem-background);
+    border:1px solid var(--skillElem-border);
+    &.active .activator-study{
+        background:var(--focus-structure-color);
+    }
+    .progressBar{
+        background:var(--progressBar-color-structure);
+    }
+    .progressBar.fast{
+        background:var(--progressBar-color-structure-fast);
+    }
+}
+.studyElem:not(.fake){
     margin:25px;
 }
-.skillElem.fake{ height:999px; }
-.skillElem.locked{
-    background:var(--skillElem-locked-background);
+.studyElem.fake{ height:999px; }
+.studyElem.locked{
+    border:1px solid var(--skillElem-border);
+    background:var(--studyElem-locked-background);
     display:flex;
     align-items:center;
     justify-content:center;
@@ -464,3 +567,28 @@ translate(- <, -, ^)
     height:100%;
 }
 .guide > *{margin-bottom:10px;}
+
+.exploreBar{
+    width:600px;
+    height:40px;
+    margin:0 auto;
+    border:2px solid black;
+    border-radius:10px;
+    position:relative;
+    overflow:hidden;
+}
+.exploreBarInner{
+    background:var(--progressBar-color-exploration);
+    border-radius:4px;
+    transition:0.5s;
+}
+.exploreBarText{
+    position:relative;
+    --exploreBarText-width:0%;
+    background:linear-gradient(to right,
+    var(--exploreBarText-color-1) 0%,
+    var(--exploreBarText-color-1) var(--exploreBarText-width),
+    var(--exploreBarText-color-2) var(--exploreBarText-width),
+    var(--exploreBarText-color-2) 100%) text;
+    color:transparent;
+}

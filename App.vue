@@ -1,5 +1,6 @@
 <script setup>
-import StudyElem from './components/SkillElem.vue';
+import SkillElem from './components/SkillElem.vue';
+import StructureElem from './components/StructureElem.vue';
 import Tooltip from './components/Tooltip.vue';
 import TooltipMain from './components/TooltipMain.vue';
 import PopupMain from './components/PopupMain.vue';
@@ -10,7 +11,7 @@ import {save, initGame, saveGame, exportGame, importGame, resetGame} from './Sav
 import {format} from './Functions.js';
 import loc from './Localization.js';
 import popup from './Popup.js';
-import {statValues, skills, guides, skillsOrder, values, refValues, updateStage, updateSkills, skillLockByTag, study, formulas} from './Values.js';
+import {statValues, skills, structures, guides, skillsOrder, structureOrder, values, refValues, updateStage, updateSkills, skillLockByTag, study, formulas} from './Values.js';
 
 /*save.stats = deepClone(entry);
 save.rivals = deepClone(rivalsBase);
@@ -59,36 +60,57 @@ function timer(action){
   }
 }
 function gameLoop(){
-  for(let i=study.value.order.length-1;i>=0; i--){
-    const activeVal = study.value.order[i];
+  for(let i=study.value.order('skill').length-1;i>=0; i--){
+    const activeVal = study.value.order('skill')[i];
     skills.value[activeVal].advance(gameSpeed * 10); //level up activated skills
     if(skills.value[activeVal].capped){
-      study.value.switch(activeVal);
+      study.value.switch('skill', activeVal);
+    }
+  }
+  for(let i=study.value.order('structure').length-1;i>=0;i--){
+    const activeVal = study.value.order('structure')[i];
+    structures.value[activeVal].advance(gameSpeed * 10); //level up activated skills
+    if(structures.value[activeVal].capped){
+      study.value.switch('structure', activeVal);
     }
   }
   updateSkills();
-  const gathering = formulas.nutrientGathering();
-  const digestion = formulas.nutrientDigestion();
   const size = save.value.res.size;
   const attack = statValues.value.effectTotal('attack');
   const aggression = statValues.value.effectTotal('attackSpeed');
   const nutrAction = save.value.misc.nutrAction;
 
-  if(skills.value.scouting.level >= 1 || save.value.res.nutrients > 0){
-    save.value.res.nutrients += gathering; //find nutrients
-    if(nutrAction === 'scouting'){
-      if(refValues.value.advanceTimer('nutrAction')){ //cycle from gathering into digestion after 30s
-        save.value.misc.nutrAction = 'digestion';
+  if(save.value.stage === 1){
+    const gathering = formulas.nutrientGathering();
+    const digestion = formulas.nutrientDigestion();
+    if(skills.value.scouting.level >= 1 || save.value.res.nutrients > 0){
+      save.value.res.nutrients += gathering; //find nutrients
+      if(nutrAction === 'scouting'){
+        if(refValues.value.advanceTimer('nutrAction')){ //cycle from gathering into digestion after 30s
+          save.value.misc.nutrAction = 'digestion';
+        }
       }
+
+      save.value.res.nutrients -= digestion; //digest nutrients into size
+      save.value.res.size += formulas.digestSizeGain(digestion); //note, new size bonus applies immediately to everything below this.
+      if(nutrAction === 'digestion'){
+        if(refValues.value.advanceTimer('nutrAction')){ //cycle from gathering into digestion after 30s
+          save.value.misc.nutrAction = 'scouting';
+        }
+      }
+    }
+  }
+  else if(save.value.stage === 2){
+
+    const scouting = statValues.value.effectTotal('bodyScouting');
+    //save.value.timers.bodyExplore = 119 + (2 * Math.random());
+    //body explore timer increases by 33.3% whenever the bar fills. This is handled in checkValues() because it triggers immediately once and after every gameLoop()
+    if(refValues.value.advanceTimer('bodyExplore', scouting)){
+      save.value.bodyExplore.count++;
     }
 
-    save.value.res.nutrients -= digestion; //digest nutrients into size
-    save.value.res.size += formulas.digestSizeGain(digestion);
-    if(nutrAction === 'digestion'){
-      if(refValues.value.advanceTimer('nutrAction')){ //cycle from gathering into digestion after 30s
-        save.value.misc.nutrAction = 'scouting';
-      }
-    }
+    const digestion = formulas.nutrientDigestion();
+    save.value.res.size += formulas.digestSizeGain(digestion); //note, new size bonus applies immediately to everything below this.
   }
   if(size > 1){ //Lose 1% of your size every second.
     const sizeLoss = formulas.passiveSizeLoss();
@@ -156,7 +178,7 @@ function gameLoop(){
   if(attack > 0){
     const target = ['rival1', 'rival2'].find((a) => save.value.rivals[a].alive);
     if(target){
-      let attackTimer = refValues.value.advanceTimer('selfAttack', gameSpeed * aggression, ['subtract']);
+      let attackTimer = refValues.value.advanceTimer('selfAttack', aggression, ['subtract']);
       if(attackTimer){ //attack one of your rivals. Always attacks rival 1 followed by rival 2 if rival 1 is gone.
         save.value.rivals.self.attacks++;
         let stolen = formulas.attackSizeStolen('you', target);
@@ -207,36 +229,44 @@ function checkValues(){ //check state of values. Run once on page load too.
     ${loc('stage_hibernation_7')}<br>
     ${loc('stage_hibernation_8')}`;
   }
-  for(let i=0;i<values.rivalNames.length;i++){ //['rival1', 'rival2']
-    const rivalName = values.rivalNames[i];
-    const currRival = save.value.rivals[rivalName];
-    if(currRival.size <= 0){
-      save.value.rivals[rivalName].alive = false;
+  if(save.value.stage === 1){
+    for(let i=0;i<values.rivalNames.length;i++){ //['rival1', 'rival2']
+      const rivalName = values.rivalNames[i];
+      const currRival = save.value.rivals[rivalName];
+      if(currRival.size <= 0){
+        save.value.rivals[rivalName].alive = false;
+      }
+      if(!currRival.alive){ //dead rivals grant a bonus to nutrients
+        statValues.value.effect.scouting[`effect_deceased_${rivalName}`] = 1.5;
+        statValues.value.effect.nutrientDigestion[`effect_deceased_${rivalName}`] = 1.5;
+        save.value.rivals[rivalName].confuse = 0;
+        save.value.timers[`${rivalName}Attack`] = 0;
+        save.value.rivals[rivalName].size = 0;
+      }
+      else{
+        delete statValues.value.effect.scouting[`effect_deceased_${rivalName}`];
+        delete statValues.value.effect.nutrientDigestion[`effect_deceased_${rivalName}`];
+      }
     }
-    if(!currRival.alive){ //dead rivals grant a bonus to nutrients
-      statValues.value.effect.scouting[`effect_deceased_${rivalName}`] = 1.5;
-      statValues.value.effect.nutrientDigestion[`effect_deceased_${rivalName}`] = 1.5;
-      save.value.rivals[rivalName].confuse = 0;
-      save.value.timers[`${rivalName}Attack`] = 0;
-      save.value.rivals[rivalName].size = 0;
+    if(!save.value.rivals.rival1.alive){
+      refValues.value.rivals.rival2.confuseGain = 1;
     }
     else{
-      delete statValues.value.effect.scouting[`effect_deceased_${rivalName}`];
-      delete statValues.value.effect.nutrientDigestion[`effect_deceased_${rivalName}`];
+      refValues.value.rivals.rival2.confuseGain = values.rivals.rival2.baseConfuseGain;
+    }
+    if(!refValues.value.rivalsAlive){
+      save.value.timers.selfAttack = 0;
+      save.value.rivals.self.mimicry = 0;
+    }
+    if(refValues.value.rivalAttacks >= 1){
+      refValues.value.stats.rivals.hidden = false; //rival first reveals itself to be hostile, unhide the "rivals" stat.
     }
   }
-  if(!save.value.rivals.rival1.alive){
-    refValues.value.rivals.rival2.confuseGain = 1;
-  }
-  else{
-    refValues.value.rivals.rival2.confuseGain = values.rivals.rival2.baseConfuseGain;
-  }
-  if(!refValues.value.rivalsAlive){
-    save.value.timers.selfAttack = 0;
-    save.value.rivals.self.mimicry = 0;
-  }
-  if(refValues.value.rivalAttacks >= 1){
-    refValues.value.stats.rivals.hidden = false; //rival first reveals itself to be hostile, unhide the "rivals" stat.
+  else if(save.value.stage === 2){
+    refValues.value.timers.bodyExplore = values.timers.bodyExplore * values.misc.bodyExploreTimeIncrease ** save.value.bodyExplore.count; //exploration timer increases by 33% every time the bar fills
+    for(let i=0;i<structureOrder.length;i++){
+      structures.value[structureOrder[i]].unlocked = (save.value.bodyExplore.count > i); //unlock structures in order.
+    }
   }
 }
 function autoSave(){
@@ -284,7 +314,8 @@ const statRows = computed(() => {
     }
   }
   return result;
-})
+});
+const sizeLoss = computed(() => formulas.passiveSizeLoss());
 const lastUnlocked = computed(() => {
   //items are unknown if not unlocked and hidden completely if there are no unlocked ones after it.
   const last = skillsOrder.findLastIndex((index) => skills.value[index].unlocked);
@@ -403,8 +434,8 @@ const rival2Info = computed(() => {
 });
 const mimicColor = computed(() => {
   const mimicPercent = save.value.rivals.self.mimicry >= refValues.value.rivals.self.mimicryMax;
-  const rival1AttackPercent = save.value.timers.rival1Attack / values.timers.rival1Attack;
-  const rival2AttackPercent = save.value.timers.rival2Attack / values.timers.rival2Attack;
+  const rival1AttackPercent = save.value.timers.rival1Attack / refValues.value.timers.rival1Attack;
+  const rival2AttackPercent = save.value.timers.rival2Attack / refValues.value.timers.rival2Attack;
   if(mimicPercent >= 1){
     return {
       mimicRival1:(save.value.rivals.rival1.alive && rival1AttackPercent >= rival2AttackPercent),
@@ -422,8 +453,8 @@ const mimicColor = computed(() => {
     <div class="sectionTop">
       <div class="stats">
         <div class="resourceItem" v-if="save.stage === 1">
-          <ProgressBar v-if="save.misc.nutrAction === 'scouting'" :type="'bar'" :progress="(save.timers.nutrAction / values.timers.nutrAction * 100)" :color="'#225522'" />
-          <ProgressBar v-if="save.misc.nutrAction === 'digestion'" :type="'bar'" :progress="100 - (save.timers.nutrAction / values.timers.nutrAction * 100)" :color="'#444411'" />
+          <ProgressBar v-if="save.misc.nutrAction === 'scouting'" :type="'bar'" :progress="(save.timers.nutrAction / refValues.timers.nutrAction * 100)" :color="'var(--progressBar-color-progression)'" />
+          <ProgressBar v-if="save.misc.nutrAction === 'digestion'" :type="'bar'" :progress="100 - (save.timers.nutrAction / refValues.timers.nutrAction * 100)" :color="'var(--progressBar-color-digestion)'" />
           <Tooltip :text="`${loc('resDesc_nutrients')}
           <br>${nutrientsDesc}`"/>
           <span class="front">{{ loc('res_nutrients', format(save.res.nutrients, 4, 'eng')) }}</span>
@@ -431,22 +462,27 @@ const mimicColor = computed(() => {
         <div class="resourceItem">
           <Tooltip :text="`${loc('resDesc_size')}
           <br>${loc('resDesc_size_1', ((formulas.sizeBonus() - 1)*100).toFixed(0))}
+          ${save.stage === 2 && skills.fleshDigestion.level >= 1 ? `<br>${loc('resDesc_size_4', format(formulas.nutrientDigestion(), 4, 'eng'))}` : ''}
           ${skills.nutrientDigestion.level >= 1 ? `<br>${loc('resDesc_size_2', format(formulas.digestSizeGain(1) * 100, 4, 'eng'))}` : ''}
-          ${formulas.passiveSizeLoss() ? `<br>${loc('resDesc_size_3', format(formulas.passiveSizeLoss() / gameSpeed, 4, 'eng'))}` : ''}`"/>
+          ${sizeLoss ? `<br>${loc('resDesc_size_3', format(sizeLoss / gameSpeed, 4, 'eng'))}` : ''}`"/>
           {{loc('res_size', format(save.res.size, 4, 'eng')) }}
         </div>
-        <div class="resourceItem" v-if="save.stage === 2"></div>
+        <div class="resourceItem" v-if="save.stage === 2">
+          <template v-if="skills.bodyScouting.level >= 1">
+            {{loc('res_structureFocus', format(study.max('structure'), 4, 'eng') - format(study.used('structure'), 4, 'eng'), format(study.max('structure'), 4, 'eng')) }}
+          </template>
+        </div>
         <div class="resourceItem">
           <Tooltip :text="`${loc('resDesc_focus')}
           <br>${loc('resDesc_focus_1')}
           <br>${loc('resDesc_focus_2', format(formulas.studyPenalty() * 100, 4, 'eng'))}`"/>
-          {{loc('res_focus', format(study.max, 4, 'eng') - format(study.used, 4, 'eng'), format(study.max, 4, 'eng')) }}
+          {{loc('res_focus', format(study.max('skill'), 4, 'eng') - format(study.used('skill'), 4, 'eng'), format(study.max('skill'), 4, 'eng')) }}
         </div>
         <!--<div class="resourceItem">
           <template v-if="skills.attack.level >= 1 && refValues.rivalsAlive">
             <Tooltip :text="`${loc('self_status_combat')}
             ${save.rivals.self.lastTarget ? `<br>${loc('self_status_combat_2', format(save.rivals.self.stolen, 4, 'eng'), loc(`${save.rivals.self.lastTarget}_name`))}` : ''}`"/>
-            <ProgressBar :type="'bar'" :progress="save.timers.selfAttack / values.timers.selfAttack * 100" :color="'#225522'" />
+            <ProgressBar :type="'bar'" :progress="save.timers.selfAttack / refValues.timers.selfAttack * 100" :color="'#225522'" />
             <ProgressBar :type="'bar'" :progress="Math.min(100, save.rivals.self.mimicry * refValues.rivals.self.mimicryMax)" :color="'#CCCCCC'" :style="{height:'10%', bottom:0}" />
             <span class="front">{{ "Status" }}</span>
           </template>
@@ -463,7 +499,7 @@ const mimicColor = computed(() => {
             </template>
             <template v-else-if="save.rivals.rival1.alive">
               <div class="warnNotif front" v-if="refValues.rivals.rival1.warn" :class="{neutral:save.rivals.rival1.lastTarget !== 'you'}">*</div>
-              <ProgressBar v-if="skills.rival1Study.level >= 15" :type="'bar'" :progress="save.timers.rival1Attack / values.timers.rival1Attack * 100" :color="'#552222'" />
+              <ProgressBar v-if="skills.rival1Study.level >= 15" :type="'bar'" :progress="save.timers.rival1Attack / refValues.timers.rival1Attack * 100" :color="'#552222'" />
               <ProgressBar :type="'bar'" :progress="Math.min(100, save.rivals.rival1.confuse * refValues.rivals.rival1.confuseMax)" :color="'#FF55AA'" :style="{height:'10%', bottom:0}" />
               <Tooltip :text="`${loc('rival1_desc_alt')}
               <br>${rival1Info}`"/>
@@ -479,7 +515,7 @@ const mimicColor = computed(() => {
           <template v-if="save.rivals.rival2.unlocked">
             <template v-if="save.rivals.rival2.alive">
               <div class="warnNotif front" v-if="refValues.rivals.rival2.warn" :class="{neutral:save.rivals.rival2.lastTarget !== 'you'}">*</div>
-              <ProgressBar v-if="skills.rival2Study.level >= 15" :type="'bar'" :progress="save.timers.rival2Attack / values.timers.rival2Attack * 100" :color="'#552222'" />
+              <ProgressBar v-if="skills.rival2Study.level >= 15" :type="'bar'" :progress="save.timers.rival2Attack / refValues.timers.rival2Attack * 100" :color="'#552222'" />
               <ProgressBar :type="'bar'" :progress="Math.min(100, save.rivals.rival2.confuse * refValues.rivals.rival2.confuseMax)" :color="'#FF55AA'" :style="{height:'10%', bottom:0}" />
               <Tooltip :text="`${rival2Info}`"/>
               <span class="front">{{loc('rival2', format(save.rivals.rival2.size, 4, 'eng')) }}</span>
@@ -499,20 +535,20 @@ const mimicColor = computed(() => {
           <div class="button style-1" :class="{selected:refValues.settings.screen === 'settings'}" @click="refValues.settings.screen = (refValues.settings.screen !== 'settings' ? 'settings' : 'game')">Settings</div>
         </div>
         <div>
-          <div class="button style-1" @click="save.timers.rival1Attack=values.timers.rival1Attack">
-            <Tooltip :text="`Rival 1 timer: ${format(save.timers.rival1Attack, 4, 'eng')}/${values.timers.rival1Attack}`"/>
+          <div class="button style-1" @click="save.timers.rival1Attack=refValues.timers.rival1Attack">
+            <Tooltip :text="`Rival 1 timer: ${format(save.timers.rival1Attack, 4, 'eng')}/${refValues.timers.rival1Attack}`"/>
             Force rival 1 attack
           </div>
         </div>
         <div>
-          <div class="button style-1" @click="save.timers.rival2Attack=values.timers.rival2Attack">
-            <Tooltip :text="`Rival 2 timer: ${format(save.timers.rival2Attack, 4, 'eng')}/${values.timers.rival2Attack}`"/>
+          <div class="button style-1" @click="save.timers.rival2Attack=refValues.timers.rival2Attack">
+            <Tooltip :text="`Rival 2 timer: ${format(save.timers.rival2Attack, 4, 'eng')}/${refValues.timers.rival2Attack}`"/>
             Force rival 2 attack
           </div>
         </div>
         <div>
-          <div class="button style-1" @click="save.timers.selfAttack=values.timers.selfAttack">
-            <Tooltip :text="`Rival 2 timer: ${format(save.timers.selfAttack, 4, 'eng')}/${values.timers.selfAttack}`"/>
+          <div class="button style-1" @click="save.timers.selfAttack=refValues.timers.selfAttack">
+            <Tooltip :text="`Rival 2 timer: ${format(save.timers.selfAttack, 4, 'eng')}/${refValues.timers.selfAttack}`"/>
             Force self attack
           </div>
         </div>
@@ -522,8 +558,8 @@ const mimicColor = computed(() => {
           </div>
         </div>
         <div>
-          <div class="button style-1" @click="skillLockByTag('basic');">
-            Lock/unlock all basic skills
+          <div class="button style-1" @click="skillLockByTag('stage1');">
+            Lock/unlock all stage 1 skills
           </div>
         </div>
         <div>
@@ -560,8 +596,8 @@ const mimicColor = computed(() => {
             <div class="self slime">
               <div class="body" :style="{width:`${save.res.size ** 0.75}px`}" :class="mimicColor">
                 <div class="attackProgress">
-                  <ProgressBar :type="'circle'" :progress="save.timers.selfAttack / values.timers.selfAttack * 100" :color="'green'" :style="{opacity:0.3}"></ProgressBar>
-                  <ProgressBar :type="'line-circle'" :progress="save.rivals.self.mimicry / refValues.rivals.self.mimicryMax * 100" :color="'#CCCCCC'" :lineWidth="5" :style="{opacity:0.5}"></ProgressBar>
+                  <ProgressBar :type="'circle'" :progress="save.timers.selfAttack / refValues.timers.selfAttack * 100" :color="'var(--progressBar-color-combat-self)'" :style="{opacity:0.3}"></ProgressBar>
+                  <ProgressBar :type="'line-circle'" :progress="save.rivals.self.mimicry / refValues.rivals.self.mimicryMax * 100" :color="'var(--progressBar-color-mimicry)'" :lineWidth="5" :style="{opacity:0.5}"></ProgressBar>
                   
                   <Tooltip :text="selfInfo"/>
                 </div>
@@ -570,8 +606,8 @@ const mimicColor = computed(() => {
             <div v-show="save.rivals.rival1.unlocked && save.stage === 1" class="rival1 slime">
               <div class="body" :style="{width:`${save.rivals.rival1.size ** 0.75}px`}" :class="{dead:!save.rivals.rival1.alive}">
                 <div class="attackProgress">
-                  <ProgressBar v-if="skills.rival1Study.level >= 15" :type="'circle'" :progress="save.timers.rival1Attack / values.timers.rival1Attack * 100" :color="'#882222'" :style="{opacity:0.5}"></ProgressBar>
-                  <ProgressBar :type="'line-circle'" :progress="save.rivals.rival1.confuse / refValues.rivals.rival1.confuseMax * 100" :color="'#FF55AA'" :lineWidth="5" :style="{opacity:0.5}"></ProgressBar>
+                  <ProgressBar v-if="skills.rival1Study.level >= 15" :type="'circle'" :progress="save.timers.rival1Attack / refValues.timers.rival1Attack * 100" :color="'var(--progressBar-color-combat-rival)'" :style="{opacity:0.5}"></ProgressBar>
+                  <ProgressBar :type="'line-circle'" :progress="save.rivals.rival1.confuse / refValues.rivals.rival1.confuseMax * 100" :color="'var(--progressBar-color-confusion)'" :lineWidth="5" :style="{opacity:0.5}"></ProgressBar>
                   
                   <Tooltip :text="rival1Info"/>
                   <template v-if="save.rivals.rival1.alive && false">
@@ -583,8 +619,8 @@ const mimicColor = computed(() => {
             <div v-show="save.rivals.rival2.unlocked && save.stage === 1" class="rival2 slime">
               <div class="body" :style="{width:`${save.rivals.rival2.size ** 0.75}px`}" :class="{dead:!save.rivals.rival2.alive}">
                 <div class="attackProgress">
-                  <ProgressBar v-if="skills.rival2Study.level >= 15" :type="'circle'" :progress="save.timers.rival2Attack / values.timers.rival2Attack * 100" :color="'#882222'" :style="{opacity:0.5}"></ProgressBar>
-                  <ProgressBar :type="'line-circle'" :progress="save.rivals.rival2.confuse / refValues.rivals.rival2.confuseMax * 100" :color="'#FF55AA'" :lineWidth="5" :style="{opacity:0.5}"></ProgressBar>
+                  <ProgressBar v-if="skills.rival2Study.level >= 15" :type="'circle'" :progress="save.timers.rival2Attack / refValues.timers.rival2Attack * 100" :color="'var(--progressBar-color-combat-rival)'" :style="{opacity:0.5}"></ProgressBar>
+                  <ProgressBar :type="'line-circle'" :progress="save.rivals.rival2.confuse / refValues.rivals.rival2.confuseMax * 100" :color="'var(--progressBar-color-confusion)'" :lineWidth="5" :style="{opacity:0.5}"></ProgressBar>
                   
                   <Tooltip :text="rival2Info"/>
                   <template v-if="save.rivals.rival2.alive && false">
@@ -604,21 +640,21 @@ const mimicColor = computed(() => {
             <div style="min-width:100px;" class="button style-1" :class="{selected:refValues.settings.infoMode === 'skills'}" @click="refValues.settings.infoMode = 'skills'">Skills</div>
           </div>
           <div style="display:flex; flex-direction:column">
-              <template v-for="(val, key) in guides" :key="key">
-                <div v-if="refValues.settings.infoMode === 'guide' && val.unlock()" class="statsItem button style-1" :class="{selected:(refValues.settings.showGuide === key)}"@click=" refValues.settings.showGuide = key;">
-                {{ loc(`guide_${key}`) }}
-                </div>
-              </template>
-              <template v-for="(val, key) in values.stats" :key="key">
-                <div v-if="refValues.settings.infoMode === 'stats' && !val.hidden" class="statsItem button style-1" :class="{selected:(refValues.settings.showStat === key)}" @click="refValues.settings.showStat = key;">
-                  {{ loc(`stat_${key}`) }}
-                </div>
-              </template>
-              <template v-for="(val, key) in skills" :key="key">
-                <div v-if="refValues.settings.infoMode === 'skills' && save.skills[key].unlocked" class="statsItem button style-1" :class="{selected:(refValues.settings.showSkill === key)}" @click="refValues.settings.showSkill = key;">
-                  {{ loc(`skill_${key}`) }}
-                </div>
-              </template>
+            <template v-for="(val, key) in guides" :key="key">
+              <div v-if="refValues.settings.infoMode === 'guide' && val.unlock()" class="statsItem button style-1" :class="{selected:(refValues.settings.showGuide === key)}"@click=" refValues.settings.showGuide = key;">
+              {{ loc(`guide_${key}`) }}
+              </div>
+            </template>
+            <template v-for="(val, key) in values.stats" :key="key">
+              <div v-if="refValues.settings.infoMode === 'stats' && !val.hidden" class="statsItem button style-1" :class="{selected:(refValues.settings.showStat === key)}" @click="refValues.settings.showStat = key;">
+                {{ loc(`stat_${key}`) }}
+              </div>
+            </template>
+            <template v-for="(val, key) in skills" :key="key">
+              <div v-if="refValues.settings.infoMode === 'skills' && save.skills[key].unlocked" class="statsItem button style-1" :class="{selected:(refValues.settings.showSkill === key)}" @click="refValues.settings.showSkill = key;">
+                {{ loc(`skill_${key}`) }}
+              </div>
+            </template>
           </div>
         </template>
         <template v-else>
@@ -626,11 +662,28 @@ const mimicColor = computed(() => {
         </template>
       </div>
       <div class="innerMain">
-        <div class="skills" v-if="refValues.settings.screen === 'game'">
-          <template v-for="(item, index) in skillsOrder">
-            <StudyElem v-if="lastUnlocked >= index && skills[item].lockLevel < 2" :key="skills[item].id" :skill="skills[item]" :study="study"/>
-          </template>
-        </div>
+        <template v-if="refValues.settings.screen === 'game'">
+          <div class="areas">
+            <div class="inline-button style-1" :class="{selected:refValues.settings.gameSection === 'skills'}" style="margin:2px 20px 0 0; padding:0 10px; min-width:100px;" @click="refValues.settings.gameSection = 'skills';">Skills</div>
+            <div v-if="skills.bodyScouting.level >= 1" class="inline-button style-1" :class="{selected:refValues.settings.gameSection === 'exploration'}" style="margin:2px 20px 0 0; padding:0 10px; min-width:100px;" @click="refValues.settings.gameSection = 'exploration';">Exploration</div>
+          </div>
+          <div v-if="refValues.settings.gameSection === 'skills'" class="skills">
+            <template v-for="(item, index) in skillsOrder">
+              <SkillElem v-if="lastUnlocked >= index && skills[item].lockLevel < 2" :key="skills[item].id" :skill="skills[item]" :study="study"/>
+            </template>
+          </div>
+          <div v-if="refValues.settings.gameSection === 'exploration'" class="exploration">
+            <div class="exploreBar">
+              <ProgressBar :type="'bar'" :class="'exploreBarInner'" :progress="refValues.getTimer('bodyExplore')"/><!--linear-gradient(transparent 0%, transparent ${refValues.getTimer('bodyExplore')}%, black ${refValues.getTimer('bodyExplore')}%, black 100%)-->
+              <div class="flex-center front full exploreBarText" :style="{'--exploreBarText-width':`${refValues.getTimer('bodyExplore')}%`}">
+                {{ refValues.getTimer('bodyExplore') }}%
+              </div>
+            </div>
+            <template v-for="(item, index) in structureOrder">
+              <StructureElem v-if="structures[item].lockLevel < 2" :key="structures[item].id" :structure="structures[item]" :study="study"/>
+            </template>
+          </div>
+        </template>
         <div class="settings" v-else-if="refValues.settings.screen === 'settings'">
           <textarea id="saveArea" class="saveArea"></textarea>
           <div class="inline-button style-1" @click="saveGame()">Save Game</div>

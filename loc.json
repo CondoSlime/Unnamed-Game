@@ -25,6 +25,7 @@
     "stat_sizeMultBonus":"Size Bonus",
     "stat_bodyScouting":"Cramped Scouting",
     "stat_fleshDigestion":"Plentiful Digestion",
+    "stat_structureFocus":"Structure Focus",
     
 
     "statDesc_test":"Test Stat",
@@ -50,6 +51,7 @@
     "statDesc_sizeMultBonus":"Greater control over your growing body.",
     "statDesc_bodyScouting":"Specialized scouting for the cramped area.",
     "statDesc_fleshDigestion":"Specialized digestion for nutrients found in the cramped area.",
+    "statDesc_structureFocus":"Specialized focus for studying structures.",
 
     "tag_basic":"basic",
     "tag_combat":"combat",
@@ -136,9 +138,13 @@
     "skillDesc_bodyScouting":"These new surroundings are completely different to what you were used to before.\nIt's quite cramped, you need to stretch your body to get anywhere.",
     "skillDesc_fleshDigestion":"Though unfamiliar, the area vaguely seems to be packed densely with material that reminds you of the nutrients you absorbed a long time ago.\nYou should figure out a way to make use of this plentiful supply.",
 
+    "structure_pathways":"Pathways",
+    "structureDesc_pathways":"Pathway description",
+    
     "res_nutrients":"Nutrients %0",
     "res_size":"Size %0",
     "res_focus":"Focus %0/%1",
+    "res_structureFocus":"S. Focus %0/%1",
 
     "resDesc_nutrients":"Discovered nutrients, can be digested to gain mass",
     "resDesc_nutrients_1":"Currently scouting for %0 nutrients/s",
@@ -147,6 +153,7 @@
     "resDesc_size_1":"Currently boosts learning rate by +%0%",
     "resDesc_size_2":"Nutrients conversion Efficiency: %0%",
     "resDesc_size_3":"You are slowly burning energy and losing %0 size/s.",
+    "resDesc_size_4":"You are digesting your surroundings into %0 mass/s",
     "resDesc_focus":"The amount of skills you can progress in at a time.",
     "resDesc_focus_1":"The speed of skills is divided by the amount of focus invested.",
     "resDesc_focus_2":"Current speed: %0%",

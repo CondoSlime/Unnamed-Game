@@ -3,32 +3,17 @@ import {statValues, values, refValues, skills} from './Values.js';
 import {save} from './Save.js';
 
 
-export class skill{
-    constructor(id, tags, types, expMax, scaling, effects, maxLevel=-1, description=function(){return `Description`}, unlockCondition=function(){return true}, visibleCondition=function(){return false}, lockedHoverDesc=""){
-        this.id = id;
-        this.tags = tags;
-        for(let [index, entry] of Object.entries(types)){
-            if(!values.stats[index].study){
-                console.warn(`Used non-study stat ${index} for skill ${id}`);
-            }
-        }
-        this.types = types;
+class levelable{
+
+    constructor(expMax, scaling, maxLevel){
         this.expMax = expMax;
-        this.maxLevel = maxLevel; //maximum level. Level can not go higher than this amount. Skill becomes automatically unfocused when this happens, -1 means no cap.
-        this._level = 0; //tracking level value to be used to determine if skill needs to recalculate effects
-        this.levelSpeed = 0 //amount of average levels that this skill gains per second. Used for progress bar animations
         this.scaling = scaling;
-        this.effects = effects;
-        this.unlocked = false;
+        this.maxLevel = maxLevel; //maximum level. Level can not go higher than this amount. Skill becomes automatically unfocused when this happens, -1 means no cap.
         this.exp = 0;
+        this.levelSpeed = 0; //amount of average levels that this skill gains per second. Used for progress bar animations
         this.level = 0;
-        this.lockLevel = 0; //lockLevel = 0 = no special properties. lockLevel = 1 = considered locked regardless of unlock condition. lockLevel = 2 = effect of lockLevel 1 + skill does not show up at all.
-        this.description = description;
-        this.unlockCondition = unlockCondition;
-        this.visibleCondition = visibleCondition; //condition for when skill should become visible pre-emptively. This happens regardless to skills of which another skill higher in the order is unlocked. A visible skill does not cause other lower order skills to become visible.
-        this.visibleHoverTooltip = true; //to get a visible but locked skill to show a tooltip, just add one in loc. Set this value to false to hide the tooltip.
-        this.skillEffect = 1;
-        this.trueLevel = 1;
+        this.trueLevel = 0; //level with effects to skill level modifiers applied. This is the value that is used for calculating stat effects
+
     }
     advance(mult, skipLevel=false){
         //this.exp += this.speed * mult;
@@ -41,6 +26,61 @@ export class skill{
             const exp = this.convertLevel(levels, this.level);
             this.exp -= exp;
             this.raiseLevel(levels); //effects are updated immediately after a level again, this ensures modifiers that affect skill effects directly get priority.
+        }
+    }
+    update(force=false){
+        //check if upgrade becomes unlocked
+        //skills with the 'relock' tag can become locked again which disables their bonuses but keeps exp and levels
+        let update = force;
+        let tagLock = false;
+        let lockLevel = this.lockLevel;
+        const mustHaveTags = deepClone(refValues.value.noTagLock);
+        for(let i=0;i<this.tags.length; i++){
+            const tag = this.tags[i];
+            if(refValues.value.tagLock.includes(tag)){
+                tagLock = true;
+            }
+            if(mustHaveTags.includes(tag)){
+                mustHaveTags.splice(mustHaveTags.indexOf(tag), 1);
+            }
+        }
+        if(mustHaveTags.length){
+            tagLock = true;
+        }
+        if(tagLock){
+            this.lockLevel = 2;
+        }
+        else{
+            this.lockLevel = 0;
+        }
+        if(!this.lockLevel){
+            if((this.tags.includes('relock') && this.unlocked !== this.unlockCondition()) || 
+            (!this.unlocked && this.unlockCondition())){
+                this.unlocked = this.unlockCondition();
+                update = true;
+            }
+        }
+        else{
+            this.unlocked = false;
+        }
+        if(this.lockLevel !== lockLevel){
+            update = true;
+        }
+        /*if(this._level !== this.level){
+            update = true;
+        }*/
+        const skillEffect = statValues.value.skillEffectTotal(this.id);
+        if(this.skillEffect != skillEffect){
+            this.skillEffect = skillEffect;
+            update = true;
+        }
+        const trueLevel = statValues.value.skillLevelTotal(this.id);
+        if(this.trueLevel != trueLevel){
+            this.trueLevel = trueLevel;
+            update = true;
+        }
+        if(update){
+            this.levelEffect();
         }
     }
     convertExp(exp, level=this.level){
@@ -92,34 +132,6 @@ export class skill{
         }
         return this.trueLevel;
     }
-    levelEffect(){
-        this._level = this._level = this.level;
-        for(let [index, entry] of Object.entries(this.effects)){
-            //index = effect name (locomotion, all, digestion, etc)
-            //entry = object {get effect, get creep, etc}
-            for(let [index2, entry2] of Object.entries(entry)){
-                //index2 = effect, creep, etc
-                //entry2 = getter function, like get effect(){return 1 + (0.1 * this.level)}
-                if(this.unlocked){
-                    if(['skillEffect', 'skillBaseLevel', 'skillLevel'].includes(index2)){
-                        statValues.value[index2][index][`skill_${this.id}`] = entry2(this.trueLevel); //skill effect boosting effects are not and should not be affected by skill effect
-                    }
-                    else{
-                        statValues.value[index2][index][`skill_${this.id}`] = entry2(this.trueLevel, this.skillEffect);
-                    }
-                }
-                else{
-                    //locked upgrades have no effect.
-                    if(index2 === 'baseEffect'){
-                        statValues.value[index2][index][`skill_${this.id}`] = 0;
-                    }
-                    else{
-                        statValues.value[index2][index][`skill_${this.id}`] = 1;
-                    }
-                }
-            }
-        }
-    }
     required(raw=false){
         //required exp for next level
         if(raw){
@@ -127,61 +139,6 @@ export class skill{
             return this.priceEffect * (this.scaling ** this.level);
         }
         return this.priceEffect * (this.scaleEffect ** this.level);
-    }
-    update(force=false){
-        //check if upgrade becomes unlocked
-        //skills with the 'relock' tag can become locked again which disables their bonuses but keeps exp and levels
-        let update = force;
-        let tagLock = false;
-        let lockLevel = this.lockLevel;
-        const mustHaveTags = deepClone(refValues.value.noTagLock);
-        for(let i=0;i<this.tags.length; i++){
-            const tag = this.tags[i];
-            if(refValues.value.tagLock.includes(tag)){
-                tagLock = true;
-            }
-            if(mustHaveTags.includes(tag)){
-                mustHaveTags.splice(mustHaveTags.indexOf(tag), 1);
-            }
-        }
-        if(mustHaveTags.length){
-            tagLock = true;
-        }
-        if(tagLock){
-            this.lockLevel = 2;
-        }
-        else{
-            this.lockLevel = 0;
-        }
-        if(!this.lockLevel){
-            if((this.tags.includes('relock') && this.unlocked !== this.unlockCondition()) || 
-            (!this.unlocked && this.unlockCondition())){
-                this.unlocked = this.unlockCondition();
-                update = true;
-            }
-        }
-        else{
-            this.unlocked = false;
-        }
-        if(this.lockLevel !== lockLevel){
-            update = true;
-        }
-        if(this._level !== this.level){
-            update = true;
-        }
-        const skillEffect = statValues.value.skillEffectTotal(this.id);
-        if(this.skillEffect != skillEffect){
-            this.skillEffect = skillEffect;
-            update = true;
-        }
-        const trueLevel = statValues.value.skillLevelTotal(this.id);
-        if(this.trueLevel != trueLevel){
-            this.trueLevel = trueLevel;
-            update = true;
-        }
-        if(update){
-            this.levelEffect();
-        }
     }
     studyTotal(){ //Returns total speed of an item. Explanation of how this works is in values.js
         let time = 0;
@@ -216,12 +173,34 @@ export class skill{
         }
         return mult;
     }
-    /*get exp(){ return save.value.skills[this.id].exp }
-    set exp(val){ save.value.skills[this.id].exp = val; }
-    get level(){ return save.value.skills[this.id].level }
-    set level(val){ save.value.skills[this.id].level = val; }
-    get unlocked(){ return save.value.skills[this.id].unlocked; }
-    set unlocked(val){ save.value.skills[this.id].unlocked = val; }*/
+    levelEffect(){
+        //this._level = this._level = this.level;
+        for(let [index, entry] of Object.entries(this.effects)){
+            //index = effect name (locomotion, all, digestion, etc)
+            //entry = object {get effect, get creep, etc}
+            for(let [index2, entry2] of Object.entries(entry)){
+                //index2 = effect, creep, etc
+                //entry2 = getter function, like get effect(){return 1 + (0.1 * this.level)}
+                if(this.unlocked){
+                    if(['skillEffect', 'skillBaseLevel', 'skillLevel'].includes(index2)){
+                        statValues.value[index2][index][`skill_${this.id}`] = entry2(this.trueLevel); //skill effect boosting effects are not and should not be affected by skill effect
+                    }
+                    else{
+                        statValues.value[index2][index][`skill_${this.id}`] = entry2(this.trueLevel, this.skillEffect);
+                    }
+                }
+                else{
+                    //locked upgrades have no effect.
+                    if(index2 === 'baseEffect'){
+                        statValues.value[index2][index][`skill_${this.id}`] = 0;
+                    }
+                    else{
+                        statValues.value[index2][index][`skill_${this.id}`] = 1;
+                    }
+                }
+            }
+        }
+    }
     get capped(){return this.maxLevel != -1 && this.level >= this.maxLevel}
     get scaleEffect(){
         //multiplier to amount of exp needed for the next level
@@ -235,10 +214,58 @@ export class skill{
         //amount of exp compared to required amount in percentages
         return this.exp / this.required() * 100;
     }
+}
+
+export class skill extends levelable{
+    constructor(id, tags, types, expMax, scaling, effects, maxLevel=-1, description=function(){return `Description`}, unlockCondition=function(){return true}, visibleCondition=function(){return false}, lockedHoverDesc=""){
+        super(expMax, scaling, maxLevel);
+        this.id = id;
+        this.tags = tags;
+        for(let [index, entry] of Object.entries(types)){
+            if(!values.stats[index].study){
+                console.warn(`Used non-study stat ${index} for skill ${id}`);
+            }
+        }
+        this.types = types;
+        //this._level = 0; //tracking level value to be used to determine if skill needs to recalculate effects
+        this.effects = effects;
+        this.unlocked = false;
+        this.lockLevel = 0; //lockLevel = 0 = no special properties. lockLevel = 1 = considered locked regardless of unlock condition. lockLevel = 2 = effect of lockLevel 1 + skill does not show up at all.
+        this.description = description;
+        this.unlockCondition = unlockCondition;
+        this.visibleCondition = visibleCondition; //condition for when skill should become visible pre-emptively. This happens regardless to skills of which another skill higher in the order is unlocked. A visible skill does not cause other lower order skills to become visible.
+        this.visibleHoverTooltip = true; //to get a visible but locked skill to show a tooltip, just add one in loc. Set this value to false to hide the tooltip.
+        this.skillEffect = 1;
+    }
+    /*get exp(){ return save.value.skills[this.id].exp }
+    set exp(val){ save.value.skills[this.id].exp = val; }
+    get level(){ return save.value.skills[this.id].level }
+    set level(val){ save.value.skills[this.id].level = val; }
+    get unlocked(){ return save.value.skills[this.id].unlocked; }
+    set unlocked(val){ save.value.skills[this.id].unlocked = val; }*/
     /*get levelFormat(){
         //format number
         return format(this.level, 4, "eng");
     }*/
+}
+
+export class structure extends levelable{ //points of interest for stage 2 (organs)
+    constructor(id, tags, types, expMax, scaling, effects, description=function(){return `Description`}){
+        super(expMax, scaling, -1);
+        this.id = id;
+        this.tags = tags;
+        for(let [index, entry] of Object.entries(types)){
+            if(!values.stats[index].study){
+                console.warn(`Used non-study stat ${index} for skill ${id}`);
+            }
+        }
+        this.types = types;
+        this.effects = effects;
+        this.unlocked = false;
+        this.lockLevel = 0; //lockLevel = 0 = no special properties. lockLevel = 1 = considered locked regardless of unlock condition. lockLevel = 2 = effect of lockLevel 1 + skill does not show up at all.
+        this.description = description;
+        this.skillEffect = 1;
+    }
 }
 
 /*export class resource{

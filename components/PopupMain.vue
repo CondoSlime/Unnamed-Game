@@ -50,9 +50,9 @@ const backgroundClass = computed(() => {
     padding:10px;
   }
 }
-.popupBackground.dark{
+/*.popupBackground.dark{
   background:
-}
+}*/
 .buttons{
   min-height:30px;
   padding-bottom:4px;
