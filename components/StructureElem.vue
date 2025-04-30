@@ -32,6 +32,7 @@ const fakeRequired = computed(() => {
   <div class="progressText">{{format(study.exp, 4, 'eng')}}/{{format(study.required(), 4, 'eng')}}</div>
 </div>*/
 /*{{ study.level>study.maxLevel ? ` (${study.maxLevel})` : `` }}*/
+console.log(structure.unlocked);
 </script>
 
 <template>

@@ -28,61 +28,6 @@ class levelable{
             this.raiseLevel(levels); //effects are updated immediately after a level again, this ensures modifiers that affect skill effects directly get priority.
         }
     }
-    update(force=false){
-        //check if upgrade becomes unlocked
-        //skills with the 'relock' tag can become locked again which disables their bonuses but keeps exp and levels
-        let update = force;
-        let tagLock = false;
-        let lockLevel = this.lockLevel;
-        const mustHaveTags = deepClone(refValues.value.noTagLock);
-        for(let i=0;i<this.tags.length; i++){
-            const tag = this.tags[i];
-            if(refValues.value.tagLock.includes(tag)){
-                tagLock = true;
-            }
-            if(mustHaveTags.includes(tag)){
-                mustHaveTags.splice(mustHaveTags.indexOf(tag), 1);
-            }
-        }
-        if(mustHaveTags.length){
-            tagLock = true;
-        }
-        if(tagLock){
-            this.lockLevel = 2;
-        }
-        else{
-            this.lockLevel = 0;
-        }
-        if(!this.lockLevel){
-            if((this.tags.includes('relock') && this.unlocked !== this.unlockCondition()) || 
-            (!this.unlocked && this.unlockCondition())){
-                this.unlocked = this.unlockCondition();
-                update = true;
-            }
-        }
-        else{
-            this.unlocked = false;
-        }
-        if(this.lockLevel !== lockLevel){
-            update = true;
-        }
-        /*if(this._level !== this.level){
-            update = true;
-        }*/
-        const skillEffect = statValues.value.skillEffectTotal(this.id);
-        if(this.skillEffect != skillEffect){
-            this.skillEffect = skillEffect;
-            update = true;
-        }
-        const trueLevel = statValues.value.skillLevelTotal(this.id);
-        if(this.trueLevel != trueLevel){
-            this.trueLevel = trueLevel;
-            update = true;
-        }
-        if(update){
-            this.levelEffect();
-        }
-    }
     convertExp(exp, level=this.level){
         //returns amount of levels that you get if you add an amount of exp to a specific level
         if(level){
@@ -186,7 +131,7 @@ class levelable{
                         statValues.value[index2][index][`skill_${this.id}`] = entry2(this.trueLevel); //skill effect boosting effects are not and should not be affected by skill effect
                     }
                     else{
-                        statValues.value[index2][index][`skill_${this.id}`] = entry2(this.trueLevel, this.skillEffect);
+                        statValues.value[index2][index][`skill_${this.id}`] = entry2(this.trueLevel, this.effect);
                     }
                 }
                 else{
@@ -235,7 +180,62 @@ export class skill extends levelable{
         this.unlockCondition = unlockCondition;
         this.visibleCondition = visibleCondition; //condition for when skill should become visible pre-emptively. This happens regardless to skills of which another skill higher in the order is unlocked. A visible skill does not cause other lower order skills to become visible.
         this.visibleHoverTooltip = true; //to get a visible but locked skill to show a tooltip, just add one in loc. Set this value to false to hide the tooltip.
-        this.skillEffect = 1;
+        this.effect = 1;
+    }
+    update(force=false){
+        //check if upgrade becomes unlocked
+        //skills with the 'relock' tag can become locked again which disables their bonuses but keeps exp and levels
+        let update = force;
+        let tagLock = false;
+        let lockLevel = this.lockLevel;
+        const mustHaveTags = deepClone(refValues.value.noTagLock);
+        for(let i=0;i<this.tags.length; i++){
+            const tag = this.tags[i];
+            if(refValues.value.tagLock.includes(tag)){
+                tagLock = true;
+            }
+            if(mustHaveTags.includes(tag)){
+                mustHaveTags.splice(mustHaveTags.indexOf(tag), 1);
+            }
+        }
+        if(mustHaveTags.length){
+            tagLock = true;
+        }
+        if(tagLock){
+            this.lockLevel = 2;
+        }
+        else{
+            this.lockLevel = 0;
+        }
+        if(!this.lockLevel){
+            if((this.tags.includes('relock') && this.unlocked !== this.unlockCondition()) || 
+            (!this.unlocked && this.unlockCondition())){
+                this.unlocked = this.unlockCondition();
+                update = true;
+            }
+        }
+        else{
+            this.unlocked = false;
+        }
+        if(this.lockLevel !== lockLevel){
+            update = true;
+        }
+        /*if(this._level !== this.level){
+            update = true;
+        }*/
+        const skillEffect = statValues.value.skillEffectTotal(this.id);
+        if(this.effect != skillEffect){
+            this.effect = skillEffect;
+            update = true;
+        }
+        const trueLevel = statValues.value.skillLevelTotal(this.id);
+        if(this.trueLevel != trueLevel){
+            this.trueLevel = trueLevel;
+            update = true;
+        }
+        if(update){
+            this.levelEffect();
+        }
     }
     /*get exp(){ return save.value.skills[this.id].exp }
     set exp(val){ save.value.skills[this.id].exp = val; }
@@ -264,7 +264,30 @@ export class structure extends levelable{ //points of interest for stage 2 (orga
         this.unlocked = false;
         this.lockLevel = 0; //lockLevel = 0 = no special properties. lockLevel = 1 = considered locked regardless of unlock condition. lockLevel = 2 = effect of lockLevel 1 + skill does not show up at all.
         this.description = description;
-        this.skillEffect = 1;
+        this.effect = 1;
+    }
+    update(force=false){
+        //check if upgrade becomes unlocked
+        //skills with the 'relock' tag can become locked again which disables their bonuses but keeps exp and levels
+        let update = force;
+        /*if(this._level !== this.level){
+            update = true;
+        }*/
+        //const structureEffect = statValues.value.structureEffectTotal(this.id);
+        const structureEffect = 1;
+        if(this.effect != structureEffect){
+            this.effect = structureEffect;
+            update = true;
+        }
+        //const trueLevel = statValues.value.structureLevelTotal(this.id);
+        const trueLevel = this.level;
+        if(this.trueLevel != trueLevel){
+            this.trueLevel = trueLevel;
+            update = true;
+        }
+        if(update){
+            this.levelEffect();
+        }
     }
 }
 

@@ -60,6 +60,10 @@ export const statValues = ref({
         this.skillStudy[index] = {base:1};
         this.skillBaseLevel[index] = {base:0};
         this.skillLevel[index] = {base:1};
+        this.structureEffect[index] = {base:1};
+        this.structureStudy[index] = {base:1};
+        this.structureBaseLevel[index] = {base:0};
+        this.structureLevel[index] = {base:1};
       }
       for(let [index, entry] of Object.entries(structures)){ //initialize structures
         for(let i=0;i<entry.tags.length;i++){
@@ -67,6 +71,10 @@ export const statValues = ref({
             this.tags.push(entry.tags[i]); //check structures for tags, add unique tags to list
           }
         }
+        this.skillEffect[index] = {base:1};
+        this.skillStudy[index] = {base:1};
+        this.skillBaseLevel[index] = {base:0};
+        this.skillLevel[index] = {base:1};
         this.structureEffect[index] = {base:1};
         this.structureStudy[index] = {base:1};
         this.structureBaseLevel[index] = {base:0};
@@ -270,6 +278,8 @@ export const saveValues = {
   misc:{
     nutrAction:values.misc.nutrAction,
   },
+  skills:{},
+  structures:{},
   stage:1,
   rivals:{
     rival1:{
@@ -555,7 +565,6 @@ export const study = ref({
     if(!order.includes(id) && max > order.length && !item[id].capped){
       save.value.study[which].order.push(id);
       item[id].enabled = true;
-      console.log(item, id, which === 'skill' ? skills.value[id].enabled : false);
     }
     else if(order.includes(id)){
       save.value.study[which].order.splice(studyVal.order.indexOf(id), 1);
@@ -635,6 +644,25 @@ export function updateSkills(force=false){
     const id = save.value.study.skill.order[i];
     if(!skills.value[id].unlocked){
         study.value.switch('skill', id);
+    }
+  }
+}
+export function updateStructures(force=false){
+  for(let [index, entry] of Object.entries(structures.value)){
+    entry.update(force); //check if new skills can be unlocked. Can lock skills again if the ['relock'] tag for said skill is set.
+    if(entry.unlocked && !save.value.structures[index]){
+      save.value.structures[index] = {unlocked:true, exp:0, level:0};
+    }
+    if(save.value.structures[index]){
+      save.value.structures[index].unlocked = entry.unlocked;
+      save.value.structures[index].exp = entry.exp;
+      save.value.structures[index].level = entry.level;
+    }
+  }
+  for(let i=save.value.study.structure.order.length-1;i>=0; i--){
+    const id = save.value.study.structure.order[i];
+    if(!structures.value[id].unlocked){
+        study.value.switch('structure', id);
     }
   }
 }
