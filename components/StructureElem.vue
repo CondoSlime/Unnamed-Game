@@ -32,11 +32,10 @@ const fakeRequired = computed(() => {
   <div class="progressText">{{format(study.exp, 4, 'eng')}}/{{format(study.required(), 4, 'eng')}}</div>
 </div>*/
 /*{{ study.level>study.maxLevel ? ` (${study.maxLevel})` : `` }}*/
-console.log(structure.unlocked);
 </script>
 
 <template>
-  <div v-if="!structure.fake && structure.unlocked" class="studyElem structureElem" :class="{active:study.order('structure').includes(structure.id)}" @click="study.switch('structure', structure.id)" :style="style">
+  <div v-if="!structure.fake && structure.unlocked" class="studyElem structureElem" :class="{active:study.order('structures').includes(structure.id)}" @click="study.switch('structures', structure.id)" :style="style">
     <Tooltip :text="structure.hasOwnProperty('description') ? structure.description() : ''" :img="structure.src" />
     <div class="inner">
       <div class="studyTop">
@@ -49,7 +48,7 @@ console.log(structure.unlocked);
       <div class="studyCenter">
       </div>
       <div class="studyBottom">
-        <template v-if="structure.levelSpeed > 0.5 && study.order('structure').includes(structure.id)">
+        <template v-if="structure.levelSpeed > 0.5 && study.order('structures').includes(structure.id)">
           <Progressbar :type="'bar'" :progress="100"></Progressbar>
           <div class="progressText">{{format(structure.levelSpeed, 4, 'eng')}}/s</div>
         </template>

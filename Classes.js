@@ -1,5 +1,5 @@
 import {deepClone, format} from './Functions.js';
-import {statValues, values, refValues, skills} from './Values.js';
+import {statValues, values, refValues} from './Values.js';
 import {save} from './Save.js';
 
 
@@ -15,9 +15,8 @@ class levelable{
         this.trueLevel = 0; //level with effects to skill level modifiers applied. This is the value that is used for calculating stat effects
 
     }
-    advance(mult, skipLevel=false){
+    _advance(amount, skipLevel=false){
         //this.exp += this.speed * mult;
-        const amount = this.studyTotal() * mult;
         this.exp += amount;
         this.levelSpeed = amount / this.required();
         if(!skipLevel && this.exp >= this.required()){
@@ -54,7 +53,7 @@ class levelable{
         else{
             const scaleEffect = this.scaleEffect;
             if(scaleEffect === 1){ //avoid division by 0
-                result += start + this.priceEffect * amount;
+                result += this.priceEffect * (amount+start);
             }
             else{
                 result += this.priceEffect * (Math.pow(scaleEffect, (amount+start)) -1) / (scaleEffect - 1);
@@ -85,7 +84,7 @@ class levelable{
         }
         return this.priceEffect * (this.scaleEffect ** this.level);
     }
-    studyTotal(){ //Returns total speed of an item. Explanation of how this works is in values.js
+    _studyTotal(){ //Returns total speed of an item. Explanation of how this works is in values.js
         let time = 0;
         let result = 0;
         for(let [index, entry] of Object.entries(this.types)){
@@ -117,34 +116,6 @@ class levelable{
             mult *= 1 / ((statValues.value.creepTotal(index) - 1) * entry + 1);
         }
         return mult;
-    }
-    levelEffect(){
-        //this._level = this._level = this.level;
-        for(let [index, entry] of Object.entries(this.effects)){
-            //index = effect name (locomotion, all, digestion, etc)
-            //entry = object {get effect, get creep, etc}
-            for(let [index2, entry2] of Object.entries(entry)){
-                //index2 = effect, creep, etc
-                //entry2 = getter function, like get effect(){return 1 + (0.1 * this.level)}
-                if(this.unlocked){
-                    if(['skillEffect', 'skillBaseLevel', 'skillLevel'].includes(index2)){
-                        statValues.value[index2][index][`skill_${this.id}`] = entry2(this.trueLevel); //skill effect boosting effects are not and should not be affected by skill effect
-                    }
-                    else{
-                        statValues.value[index2][index][`skill_${this.id}`] = entry2(this.trueLevel, this.effect);
-                    }
-                }
-                else{
-                    //locked upgrades have no effect.
-                    if(index2 === 'baseEffect'){
-                        statValues.value[index2][index][`skill_${this.id}`] = 0;
-                    }
-                    else{
-                        statValues.value[index2][index][`skill_${this.id}`] = 1;
-                    }
-                }
-            }
-        }
     }
     get capped(){return this.maxLevel != -1 && this.level >= this.maxLevel}
     get scaleEffect(){
@@ -181,6 +152,24 @@ export class skill extends levelable{
         this.visibleCondition = visibleCondition; //condition for when skill should become visible pre-emptively. This happens regardless to skills of which another skill higher in the order is unlocked. A visible skill does not cause other lower order skills to become visible.
         this.visibleHoverTooltip = true; //to get a visible but locked skill to show a tooltip, just add one in loc. Set this value to false to hide the tooltip.
         this.effect = 1;
+    }
+    studyTotal(){ //Returns total speed of an item. Explanation of how this works is in values.js
+        let time = 0;
+        let result = 0;
+        for(let [index, entry] of Object.entries(this.types)){
+            time += 1 / statValues.value.effectTotal(index) * entry;
+        }
+        result = 1 / time;
+        for(let i=0;i<this.tags.length;i++){ //apply speed modifiers that are dependent to this item's tags.
+            result *= statValues.value.skillTagStudyMods(this.tags[i]);
+        }
+        result *= statValues.value.effectTotal('skillStudyRate');
+        return result;
+    }
+    advance(mult, skipLevel=false){
+        //this.exp += this.speed * mult;
+        let amount = this.studyTotal() * mult;
+        this._advance(amount, skipLevel);
     }
     update(force=false){
         //check if upgrade becomes unlocked
@@ -237,6 +226,34 @@ export class skill extends levelable{
             this.levelEffect();
         }
     }
+    levelEffect(){
+        //this._level = this._level = this.level;
+        for(let [index, entry] of Object.entries(this.effects)){
+            //index = effect name (locomotion, all, digestion, etc)
+            //entry = object {get effect, get creep, etc}
+            for(let [index2, entry2] of Object.entries(entry)){
+                //index2 = effect, creep, etc
+                //entry2 = getter function, like get effect(){return 1 + (0.1 * this.level)}
+                if(this.unlocked){
+                    if(['skillEffect', 'skillBaseLevel', 'skillLevel'].includes(index2)){
+                        statValues.value[index2][index][`skill_${this.id}`] = entry2(this.trueLevel); //skill effect boosting effects are not and should not be affected by skill effect
+                    }
+                    else{
+                        statValues.value[index2][index][`skill_${this.id}`] = entry2(this.trueLevel, this.effect);
+                    }
+                }
+                else{
+                    //locked upgrades have no effect.
+                    if(index2 === 'baseEffect'){
+                        statValues.value[index2][index][`skill_${this.id}`] = 0;
+                    }
+                    else{
+                        statValues.value[index2][index][`skill_${this.id}`] = 1;
+                    }
+                }
+            }
+        }
+    }
     /*get exp(){ return save.value.skills[this.id].exp }
     set exp(val){ save.value.skills[this.id].exp = val; }
     get level(){ return save.value.skills[this.id].level }
@@ -266,6 +283,21 @@ export class structure extends levelable{ //points of interest for stage 2 (orga
         this.description = description;
         this.effect = 1;
     }
+    studyTotal(){ //Returns total speed of an item. Explanation of how this works is in values.js
+        let time = 0;
+        let result = 0;
+        for(let [index, entry] of Object.entries(this.types)){
+            time += 1 / statValues.value.effectTotal(index) * entry;
+        }
+        result = 1 / time;
+        result *= statValues.value.effectTotal('structureStudyRate');
+        return result;
+    }
+    advance(mult, skipLevel=false){
+        //this.exp += this.speed * mult;
+        let amount = this.studyTotal() * mult;
+        this._advance(amount, skipLevel);
+    }
     update(force=false){
         //check if upgrade becomes unlocked
         //skills with the 'relock' tag can become locked again which disables their bonuses but keeps exp and levels
@@ -287,6 +319,35 @@ export class structure extends levelable{ //points of interest for stage 2 (orga
         }
         if(update){
             this.levelEffect();
+        }
+    }
+    
+    levelEffect(){
+        //this._level = this._level = this.level;
+        for(let [index, entry] of Object.entries(this.effects)){
+            //index = effect name (locomotion, all, digestion, etc)
+            //entry = object {get effect, get creep, etc}
+            for(let [index2, entry2] of Object.entries(entry)){
+                //index2 = effect, creep, etc
+                //entry2 = getter function, like get effect(){return 1 + (0.1 * this.level)}
+                if(this.unlocked){
+                    if(['structureEffect', 'structureBaseLevel', 'structureLevel'].includes(index2)){
+                        statValues.value[index2][index][`structure_${this.id}`] = entry2(this.trueLevel); //skill effect boosting effects are not and should not be affected by skill effect
+                    }
+                    else{
+                        statValues.value[index2][index][`structure_${this.id}`] = entry2(this.trueLevel, this.effect);
+                    }
+                }
+                else{
+                    //locked upgrades have no effect.
+                    if(index2 === 'baseEffect'){
+                        statValues.value[index2][index][`structure_${this.id}`] = 0;
+                    }
+                    else{
+                        statValues.value[index2][index][`structure_${this.id}`] = 1;
+                    }
+                }
+            }
         }
     }
 }

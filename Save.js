@@ -1,40 +1,15 @@
-import {saveValues, values, study, statValues, updateStage, initRefValues, skills, structures, updateSkills, updateStructures} from './Values.js';
+import {saveValues, values, study, statValues, updateStage, initRefValues, skillables, skillablesOrder, updateEffects} from './Values.js';
 import {deepClone, mergeDeep} from './Functions.js';
 import {ref} from 'vue';
 import * as lzString from 'lz-string';
 
 
-export const save = ref({
-  res:{
-
-  },
-  skills:{
-
-  },
-  structures:{
-
-  },
-  timers:{
-
-  },
-  misc:{
-
-  },
-  rivals:{
-
-  },
-  study:{
-
-  },
-  settings:{
-
-  }
-});
+export const save = ref({});
 
 export function saveGame(){
-	window.localStorage.setItem("unnamed-project", lzString.compressToBase64(JSON.stringify(save.value)));
+	window.localStorage.setItem("unnamed-project", compressSave(save.value));
 }
-export function loadGame(result=false){
+export function loadGame(result=false, reset=false){
     let decoded = false;
     if(result){
         decoded = result;
@@ -46,21 +21,7 @@ export function loadGame(result=false){
         }
     }
     if(decoded){
-        save.value = mergeDeep(deepClone(saveValues), deepClone(decoded));
-        /*for(let [index, entry] of Object.entries(skills.value)){
-            if(!save.value.skills[index]){
-                save.value.skills[index] = {exp:0, level:0, unlocked:false, enabled:false};
-            }
-        }*/
-        /*for(let [index, entry] of Object.entries(values.stats)){
-            console.log(index);
-            if(!save.value.skills[index]){
-                save.value.skills[index] = decoded.stats[index];
-            }
-        }*/
-        /*save.value.rivals = deepClone(decoded.rivals);
-        save.value.study = deepClone(decoded.study);
-        save.value.settings = deepClone(decoded.settings);*/
+        save.value = mergeDeep(deepClone(saveValues), reset ? {} : deepClone(decoded));
     }
     else{
         //console.warn('something went wrong loading the save file!');
@@ -68,7 +29,6 @@ export function loadGame(result=false){
 }
 export function initSave(){
     //save.value.res = deepClone(saveValues.res);
-    save.value = deepClone(saveValues);
     /*for(let [index, entry] of Object.entries(saveValues.stats)){
         save.value.stats[index] = entry;
     }*/
@@ -79,45 +39,28 @@ export function initSave(){
     //for(let [index, entry] of rivals){
     //}
 }
-export function initGame(reset=false){
-    initSave();
-    statValues.value.initialize(values.stats, skills.value, structures.value);
+export function initGame(saveString=false, reset=false){
+    save.value = deepClone(saveValues);
+    statValues.value.initialize(values.stats, skillables.value.skills, skillables.value.structures);
     if(!reset){
-        loadGame();
+        loadGame(saveString, reset);
     }
     initRefValues();
-    for(let [index, entry] of Object.entries(save.value.skills)){
-        if(skills.value[index]){
-            skills.value[index].level = entry.level;
-            skills.value[index].exp = entry.exp;
-            skills.value[index].unlocked = entry.unlocked;
+    const studyTypes = deepClone(Object.keys(skillablesOrder.value));
+    for(let i=0;i<studyTypes.length; i++){
+        let which = studyTypes[i];
+        for(let [index, entry] of Object.entries(skillables.value[which])){
+            const item = save.value[which][index] || {};
+            skillables.value[which][index].level = item.level || 0;
+            skillables.value[which][index].exp = item.exp || 0;
+            skillables.value[which][index].unlocked = item.unlocked || false;
         }
     }
-    for(let i=0;i<save.value.study.skill.order.length; i++){
-        const id = save.value.study.skill.order[i];
-        if(!skills.value[id] || !skills.value[id].unlocked){
-            study.value.switch('skill', id);
-        }
-    }
-    for(let [index, entry] of Object.entries(save.value.structures)){
-        if(structures.value[index]){
-            structures.value[index].level = entry.level;
-            structures.value[index].exp = entry.exp;
-            structures.value[index].unlocked = entry.unlocked;
-        }
-    }
-    for(let i=0;i<save.value.study.structure.order.length; i++){
-        const id = save.value.study.structure.order[i];
-        if(!structures.value[id] || !structures.value[id].unlocked){
-            study.value.switch('structure', id);
-        }
-    }
-    updateStage();
-    updateSkills(true); //update stats immediately on page load.
-    updateStructures(true);
+    updateStage(); //updateEffects happens in here already.
+    //updateEffects(true); //update stats immediately on page load.
 }
 export function resetGame(){
-    initGame(true);
+    initGame(false, true);
 }
 export function exportGame(){
     const elem = document.getElementById("saveArea");
@@ -125,11 +68,14 @@ export function exportGame(){
         elem.value = window.localStorage.getItem("unnamed-project");
     }
 }
+export function compressSave(save){
+    return lzString.compressToBase64(JSON.stringify(save));
+}
 export function importGame(){
     const elem = document.getElementById("saveArea");
     const result = lzString.decompressFromBase64(elem.value);
     if(result){
-        loadGame(JSON.parse(result));
+        initGame(JSON.parse(result), false);
         elem.value = "";
     }
     else if(elem){

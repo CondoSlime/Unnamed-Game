@@ -3,6 +3,7 @@ import Tooltip from './Tooltip.vue';
 import Progressbar from './Progressbar.vue';
 import {computed, watch, ref} from 'vue';
 import {format} from '../Functions.js';
+//import {study} from '../Values.js';
 import loc from '../Localization.js';
 const props = defineProps(['skill', 'study', 'style', 'fake']);
 const study = props.study;
@@ -27,6 +28,15 @@ const lingeringExpBar = computed(() => {
 const fakeRequired = computed(() => {
   return skill.expMax * (skill.scaling ** skill.level);
 })
+function clickStudyActivate(){
+  if(study.free('skills') || study.order('skills').includes(skill.id)){
+    study.switch('skills', skill.id);
+  }
+  else{
+    study.flash.skill = true;
+    setTimeout(() => {study.flash.skills = false; console.log(study.flash.skills)}, 700);
+  }
+}
 /*<div class="progressBar">
   <div class="progress" :style="`width:${lingeringExpBar}%`"></div>
   <div class="progressText">{{format(skill.exp, 4, 'eng')}}/{{format(skill.required(), 4, 'eng')}}</div>
@@ -35,7 +45,7 @@ const fakeRequired = computed(() => {
 </script>
 
 <template>
-  <div v-if="!skill.fake && skill.unlocked" class="studyElem skillElem" :class="{active:study.order('skill').includes(skill.id)}" @click="study.switch('skill', skill.id)" :style="style">
+  <div v-if="!skill.fake && skill.unlocked" class="studyElem skillElem" :class="{active:study.order('skills').includes(skill.id)}" @click="clickStudyActivate()" :style="style">
     <Tooltip :text="skill.hasOwnProperty('description') ? skill.description() : ''" :img="skill.src" />
     <div class="inner">
       <div class="studyTop">
@@ -49,7 +59,7 @@ const fakeRequired = computed(() => {
       <div class="sstudyCenter">
       </div>
       <div class="studyBottom">
-        <template v-if="skill.levelSpeed > 0.5 && study.order('skill').includes(skill.id)">
+        <template v-if="skill.levelSpeed > 0.5 && study.order('skills').includes(skill.id)">
           <Progressbar :type="'bar'" :class="'fast'" :progress="100"></Progressbar>
           <div class="progressText">{{format(skill.levelSpeed, 4, 'eng')}}/s</div>
         </template>

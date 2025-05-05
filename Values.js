@@ -105,7 +105,7 @@ export const statValues = ref({
       }
       let effect = this.baseEffectMods(type) * this.effectMods(type);
       const tags = refValues.value.stats[type];
-      if(tags.special || mods.includes('raw')){ //do not apply extra modifiers to special stats like focus.
+      if(tags.special || mods.includes('raw')){ //do not apply extra modifiers to special stats like time
         return effect;
       }
       if(tags.study){ //modifiers exclusive to skills used for studies.
@@ -130,14 +130,14 @@ export const statValues = ref({
   },
   skillEffectTotal(id){ //effect multiplier ("e" value) of a skill
     let effect = this.skillEffectMods(id);
-    const skill = skills.value[id];
+    const skill = skillables.value.skills[id];
     for(let i=0;i<skill.tags.length;i++){ //apply effect modifiers that are tag-dependent.
       effect *= this.skillTagEffectMods(skill.tags[i]);
     }
     return effect;
   },
   skillLevelTotal(skill){ //level total from a skill. Can get free levels from other sources. 
-    let effect = this.skillBaseLevelMods(skill) + (skills.value[skill].capped ? skills.value[skill].maxLevel : skills.value[skill].level) * this.skillLevelMods(skill);
+    let effect = this.skillBaseLevelMods(skill) + (skillables.value.skills[skill].capped ? skillables.value.skills[skill].maxLevel : skillables.value.skills[skill].level) * this.skillLevelMods(skill);
     return effect;
   },
   allStats(){ //returns object with all stat types and additive, multiplicative, price and creep modifiers attached. Used for debugging.
@@ -168,9 +168,9 @@ export const statValues = ref({
   },
   allSkills(){
     const result = {}
-    for(let [index, entry] of Object.entries(skills.value)){
+    for(let [index, entry] of Object.entries(skillables.value.skills)){
       result[index] = {level:entry.level, exp:entry.exp, stats:{}}
-      for(let [index2, entry2] of Object.entries(skills.value[index].effects)){
+      for(let [index2, entry2] of Object.entries(skillables.value.skills[index].effects)){
         result[index].stats[index2] = {}
         for(let [index3, entry3] of Object.entries(entry2)){
           result[index].stats[index2][index3] = entry3(entry.level);
@@ -190,20 +190,19 @@ export const values = { //do not modify
     rival1Attack:100,
     rival2Attack:240,
     selfAttack:100,
-    bodyExplore:240
+    exploration:240
   },
   misc:{
-    gameSpeed:0.1,
-    timerSpeed:100,
-    nutrAction:'scouting',
-    scoutSpeed:1,
-    digestSpeed:1,
-    digestionEfficiency:0.1,
-    sizeBonus:1.3,
-    digestToSizeEff:0.1,
-    fooledConfuseMult:2,
-    structureFocusExplorePenalty:1/3*2,
-    bodyExploreTimeIncrease:4/3
+    gameSpeed:0.1, //multiplier to all resource production and consumption
+    timerSpeed:100, //game timer rate in ms, multiplies game speed as well
+    nutrAction:'scouting', //stage 1 feature, swaps between scouting and digestion to indicate which action is more effective
+    scoutSpeed:1, //nutrient gathering rate for stage 1
+    digestSpeed:1, //nutrient digestion rate for stage 1
+    digestionEfficiency:0.1, //nutrient to size conversion rate
+    sizeBonus:1.3, //bonus for larger size, applied addively once every time size doubles above 1
+    fooledConfuseMult:2, //multiplier to confusion gained for rivals in stage 1 after they get fooled by mimicry
+    structureFocusExplorePenalty:1/3*2, //penalty to exploration rate for every point of structure focus invested
+    exploreTimeIncrease:1.6 //extra time needed to complete next exploration every time the bar fills
   },
   tags:{
     basic:{},
@@ -218,12 +217,13 @@ export const values = { //do not modify
     //hidden: Whether the stat is hidden or not. Shows as ??? in tooltips and doesn't show up in stats display (latter tbd)
     //base: sets the base starting value of a stat (default 1), skills requiring a stat with a value of 0 can't be completed.
     test:{/* tags */}, //test skill with no effect
+    time:{study:true, special:true}, //basic stat, unaffected by all stat boosts and penalties
     locomotion:{study:true}, //basic stat, just used to speed up study rate of other skills
     senses:{study:true}, //basic stat
     scouting:{base:0}, //scouting finds nutrients at 1 nutrient/s per 1 scouting
     digestion:{study:true}, //basic stat
-    nutrientDigestion:{base:0}, //nutrientDigestion turns nutrients into size at a rate of 1 nutrient/s into 0.1 size per 1 nutrientDigestion
-    digestionEfficiency:{base:1}, //digestionEfficiency raises the amount of size gained per nutrient. default is a 1 to 0.1 ratio. Increases linearly.
+    nutrientDigestion:{base:0}, //turns nutrients into size at a rate of 1 nutrient/s into 0.1 size per 1 nutrientDigestion
+    digestionEfficiency:{base:1}, //raises the amount of size gained per nutrient. default is a 1 to 0.1 ratio. Increases linearly.
     multitasking:{base:0}, //lowers the study penalty for assigning multiple focus points at once. each 0.01 increases speed by 1% additively. Caps at 100% speed.
     scavenger:{base:0}, //allows digesting nutrients while gathering and gathering nutrients while digesting. Gain 1% speed additively per point of scavenger
     memory:{study:true}, //basic stat
@@ -238,8 +238,11 @@ export const values = { //do not modify
     shapeShifting:{base:0}, //may cause rivals to fail an attack on you. Builds up mind control faster if they do.
     boneGrowth:{study:true}, //basic stat
     sizeMultBonus:{}, //multiplicative multiplier to study rate based on size. 1 = +100% per log2 size
-    bodyScouting:{base:0}, //bodyScouting, specialized scouting for stage 2, builds progress towards exploring your surroundings and finding new structures (organs) instead of finding nutrients.
-    fleshDigestion:{base:0}, //fleshDigestion, specialized digestion for stage 2, converts the environment into size. Does not rely on scouting for nutrients.
+    exploration:{base:0}, //specialized scouting for stage 2, builds progress towards exploring your surroundings and finding new structures (organs) instead of finding nutrients.
+    fleshDigestion:{base:0}, //specialized digestion for stage 2, converts the environment into size. Does not rely on scouting for nutrients.
+    skillStudyRate:{}, //multiplies study rate for all skills
+    structureStudyRate:{}, //multiplies study rate for structures
+    beings:{hidden:true, study:true} //basic stat. Hidden until the tiny beings attack in stage 2
   },
   rivals:{
     rival1:{
@@ -273,7 +276,7 @@ export const saveValues = {
     rival1Attack:0,
     rival2Attack:0,
     selfAttack:0,
-    bodyExplore:0
+    exploration:0
   },
   misc:{
     nutrAction:values.misc.nutrAction,
@@ -307,14 +310,14 @@ export const saveValues = {
       lastTarget:false
     }
   },
-  bodyExplore:{
+  exploration:{
     count:0
   },
   study:{
-    skill:{
+    skills:{
       order:[]
     },
-    structure:{
+    structures:{
       order:[]
     }
   },
@@ -351,8 +354,10 @@ export const refValuesBase = { //do not modify
   tags:deepClone(values.tags),
   timers:deepClone(values.timers),
   misc:{
-    rival1Warn:false,
-    rival2Warn:false,
+    rival1Warn:false, //currently unused
+    rival2Warn:false, //currently unused
+    skillNotif:false, //highlight skills tab if a new skill option is unlocked (unimplemented)
+    exploreNotif:false //highlight explore tab if a new exploration option is unlocked
   },
   rivals:{
     rival1:{
@@ -516,7 +521,7 @@ export const formulas = {
     const multBonus = statValues.value.effectTotal('sizeMultBonus'); //size mult is a secondary compounding multiplier to the size bonus. (currently unused)
     return Math.max(1, 1+(values.misc.sizeBonus-1) * sizeMult) * (multBonus ** sizeMult);
   },
-  studyPenalty(which='skill'){ //study penalty for assigning more focus points at once, by default, study rate is divided by amount of points invested. Penalty reduced by multitasking skill
+  studyPenalty(which='skills'){ //study penalty for assigning more focus points at once, by default, study rate is divided by amount of points invested. Penalty reduced by multitasking skill
     return Math.min(1, 1 / Math.max(1, study.value.used(which)) + statValues.value.effectTotal("multitasking"));
   }
 }
@@ -529,7 +534,7 @@ export const guides = {
     unlock:function(){return true}
   },
   size:{
-    unlock:function(){return skills.value.scouting.unlocked || skills.value.nutrientDigestion.unlocked}
+    unlock:function(){return skillables.value.skills.scouting.unlocked || skillables.value.skills.nutrientDigestion.unlocked}
   },
   rivals:{
     unlock:function(){return refValues.value.rivalAttacks}
@@ -538,38 +543,37 @@ export const guides = {
 
 export const study = ref({
   max: function(which){
-    if(which === 'skill'){
-      return statValues.value.effectTotal('focus');
+    if(which === 'skills'){
+      return Math.floor(statValues.value.effectTotal('focus'));
     }
-    else if(which === 'structure'){
-      return statValues.value.effectTotal('structureFocus');
+    else if(which === 'structures'){
+      return Math.floor(statValues.value.effectTotal('structureFocus'));
     }
   },
   order: function(which){return save.value.study[which].order},
   used: function(which){return this.order(which).length},
+  free: function(which){return this.max(which) - this.used(which)},
   switch:function(which, id){
-    let item = false;
-    if(which === 'skill'){
-      item = skills.value;
-    }
-    else if(which === 'structure'){
-      item = structures.value;
-    }
+    const item = skillables.value[which];
     if(!item){
       console.error('incorrect value for which in study', which);
       return false;
     }
     const studyVal = save.value.study[which];
-    const order = this.order(which);
-    const max = this.max(which);
-    if(!order.includes(id) && max > order.length && !item[id].capped){
-      save.value.study[which].order.push(id);
+    if(!item[id].enabled && !item[id].capped){
+      if(!save.value.study[which].order.includes(id)){
+        save.value.study[which].order.push(id);
+      }
       item[id].enabled = true;
     }
-    else if(order.includes(id)){
+    else if(item[id].enabled){
       save.value.study[which].order.splice(studyVal.order.indexOf(id), 1);
       item[id].enabled = false;
     }
+  },
+  flash:{ //when set to true, a red flash happens if your focus is capped if you try to study more skills
+    skills:false,
+    structures:false
   }
 });
 
@@ -582,14 +586,14 @@ export function updateStage(stage=-1){
     }
   }
   if(save.value.stage === 1){
-    skillLockByNoTag('stage1', true);
-    skillLockByNoTag('stage2', false);
-    skillLockByNoTag('stage3', false);
+    skillLockByNoTag('stage1', true, true);
+    skillLockByNoTag('stage2', false, true);
+    skillLockByNoTag('stage3', false, true);
   }
   else if(save.value.stage === 2){
-    skillLockByNoTag('stage1', false);
-    skillLockByNoTag('stage2', true);
-    skillLockByNoTag('stage3', false);
+    skillLockByNoTag('stage1', false, true);
+    skillLockByNoTag('stage2', true, true);
+    skillLockByNoTag('stage3', false, true);
   }
   if(save.value.stage !== 1){
     for(let i=0;i<values.rivalNames.length;i++){
@@ -598,7 +602,7 @@ export function updateStage(stage=-1){
       delete statValues.value.effect.nutrientDigestion[`effect_deceased_${name}`];
     }
   }
-  updateSkills();
+  updateEffects(true);
 }
 
 export function skillLockByTag(tag, lock='toggle', skipUpdate=false){ //lock or unlock all skills that have a certain tag. When locked, they are unavailable and inactive regardless of conditions.
@@ -611,7 +615,7 @@ export function skillLockByTag(tag, lock='toggle', skipUpdate=false){ //lock or 
     refValues.value.tagLock.splice(pos, 1); //remove lock on skills with tag
   }
   if(!skipUpdate){
-    updateSkills();
+    updateEffects();
   }
 }
 export function skillLockByNoTag(tag, lock='toggle', skipUpdate=false){ //lock or unlock all skills that do not have a certain tag. When locked, they are unavailable and inactive regardless of conditions.
@@ -624,47 +628,101 @@ export function skillLockByNoTag(tag, lock='toggle', skipUpdate=false){ //lock o
     refValues.value.noTagLock.splice(pos, 1); //remove lock on skills with tag
   }
   if(!skipUpdate){
-    updateSkills();
+    updateEffects();
   }
 }
 
-export function updateSkills(force=false){
-  for(let [index, entry] of Object.entries(skills.value)){
-    entry.update(force); //check if new skills can be unlocked. Can lock skills again if the ['relock'] tag for said skill is set.
-    if(entry.unlocked && !save.value.skills[index]){
-      save.value.skills[index] = {unlocked:true, exp:0, level:0};
-    }
-    if(save.value.skills[index]){
-      save.value.skills[index].unlocked = entry.unlocked;
-      save.value.skills[index].exp = entry.exp;
-      save.value.skills[index].level = entry.level;
+export function resetByTag(tag, which){
+  for(let [index, entry] of Object.entries(skillables.value[which])){
+    if(entry.tags.includes(tag) || tag === 'all'){
+      entry.unlocked = false;
+      entry.exp = 0;
+      entry.level = 0;
     }
   }
-  for(let i=save.value.study.skill.order.length-1;i>=0; i--){
-    const id = save.value.study.skill.order[i];
-    if(!skills.value[id].unlocked){
-        study.value.switch('skill', id);
-    }
-  }
+  updateEffects();
 }
-export function updateStructures(force=false){
-  for(let [index, entry] of Object.entries(structures.value)){
-    entry.update(force); //check if new skills can be unlocked. Can lock skills again if the ['relock'] tag for said skill is set.
-    if(entry.unlocked && !save.value.structures[index]){
-      save.value.structures[index] = {unlocked:true, exp:0, level:0};
-    }
-    if(save.value.structures[index]){
-      save.value.structures[index].unlocked = entry.unlocked;
-      save.value.structures[index].exp = entry.exp;
-      save.value.structures[index].level = entry.level;
+
+export function updateEffects(force=false, type='all'){
+  for(let [index, entry] of Object.entries(skillables.value)){
+    if(type === 'all' || index === type){
+      for(let [index2, entry2] of Object.entries(entry)){
+        entry2.update(force); //check if new skills can be unlocked. Can lock skills again if the ['relock'] tag for said skill is set.
+        if(entry2.unlocked && !save.value.skills[index]){
+          save.value[index][index2] = {unlocked:true, exp:0, level:0};
+        }
+        if(save.value[index][index2]){
+          save.value[index][index2].unlocked = entry2.unlocked;
+          save.value[index][index2].exp = entry2.exp;
+          save.value[index][index2].level = entry2.level;
+        }
+      }
     }
   }
-  for(let i=save.value.study.structure.order.length-1;i>=0; i--){
-    const id = save.value.study.structure.order[i];
-    if(!structures.value[id].unlocked){
-        study.value.switch('structure', id);
+  for(let [index, entry] of Object.entries(skillables.value)){
+    if(type === 'all' || index === type){
+      for(let i=save.value.study[index].order.length-1;i>=0; i--){
+        const id = save.value.study[index].order[i];
+        const enabled = skillables.value[index][id].enabled;
+        const item = skillables.value[index][id];
+        if(!item.unlocked || item.capped){
+          study.value.switch(index, id); //switch off locked or capped skillables
+        }
+        if(!enabled && item.unlocked){
+          study.value.switch(index, id); //switch on studies that are not enabled but are enabled in the save.
+        }
+      }
+      for(let i=save.value.study[index].order.length-1;i>=0; i--){
+        const id = save.value.study[index].order[i];
+        const enabled = skillables.value[index][id].enabled;
+        if(study.value.free(index) < 0 && enabled){
+          study.value.switch(index, id); //switch off studies that are over the limit.
+        }
+      }
     }
   }
+  /*if(['all', 'skills'].includes(type)){
+    for(let [index, entry] of Object.entries(skillables.value.skills)){
+      entry.update(force); //check if new skills can be unlocked. Can lock skills again if the ['relock'] tag for said skill is set.
+      if(entry.unlocked && !save.value.skills[index]){
+        save.value.skills[index] = {unlocked:true, exp:0, level:0};
+      }
+      if(save.value.skills[index]){
+        save.value.skills[index].unlocked = entry.unlocked;
+        save.value.skills[index].exp = entry.exp;
+        save.value.skills[index].level = entry.level;
+      }
+    }
+  }
+  if(['all', 'structures'].includes(type)){
+    for(let [index, entry] of Object.entries(skillables.value.structures)){
+      entry.update(force); //check if new skills can be unlocked. Can lock skills again if the ['relock'] tag for said skill is set.
+      if(entry.unlocked && !save.value.structures[index]){
+        save.value.structures[index] = {unlocked:true, exp:0, level:0};
+      }
+      if(save.value.structures[index]){
+        save.value.structures[index].unlocked = entry.unlocked;
+        save.value.structures[index].exp = entry.exp;
+        save.value.structures[index].level = entry.level;
+      }
+    }
+  }
+  if(['all', 'skills'].includes(type)){
+    for(let i=save.value.study.skill.order.length-1;i>=0; i--){
+      const id = save.value.study.skill.order[i];
+      if(!skillables.value.skills[id].unlocked){
+          study.value.switch('skill', id);
+      }
+    }
+  }
+  if(['all', 'structures'].includes(type)){
+    for(let i=save.value.study.structure.order.length-1;i>=0; i--){
+      const id = save.value.study.structure.order[i];
+      if(!skillables.value.structures[id].unlocked){
+          study.value.switch('structures', id);
+      }
+    }
+  }*/
 }
 
 /*new skill(
@@ -674,7 +732,7 @@ export function updateStructures(force=false){
   100, //this.expMax, amount of exp needed to get the first level
   1.12, //this.scaling, cost creep, when a level is gained, the experience required for the next level is multiplied by this amount
   { //this.effects
-    stat1:{ //affects statValues.value.stat1 OR skills.value.stat1 OR skills.value.tags.includes('stat1'), effects are only applied if this item is unlocked
+    stat1:{ //affects statValues.value.stat1 OR skillables.value.skills.stat1 OR skillables.value.skills.tags.includes('stat1'), effects are only applied if this item is unlocked
       //l is equal to the level of the item
       //e is equal to the effect modifier of the item (default 1)
       baseEffect(l, e){return 0.1 * l * e}, //this.effects.stat1.baseEffect(), baseEffect = linear additive modifier for stats.
@@ -751,12 +809,15 @@ ${exclude.includes('statDescr') ? '' : `${desc_stats(skill.types)}<br>`}\
 ${insert[3] ? `${insert[3]}<br>` : ''}\
 ${exclude.includes('effect') || !Object.keys(skill.effects).length ? '' : `${desc_skill_effects(skill)}<br>`}\
 ${insert[4] ? `${insert[4]}<br>` : ''}\
-${exclude.includes('speed') ? '' : `speed: ${format(skills.value[skill.id].studyTotal() / gameSpeed, 4, 'eng')}/s<br>`}\
+${exclude.includes('speed') ? '' : `speed: ${format(skillables.value.skills[skill.id].studyTotal() / gameSpeed, 4, 'eng')}/s<br>`}\
 ${insert[5] ? `${insert[5]}<br>` : ''}`.slice(0, -4);
 }
 
-function desc_structure(structure){
-  return structure.id;
+function desc_structure(structure, insert=[], locName=`structureDesc_${structure.id}`, exclude=[]){
+  return `${exclude.includes('descr') ? '' : `${loc(locName)}<br>`}\
+  ${exclude.includes('statDescr') ? '' : `${desc_stats(structure.types)}<br>`}\
+  ${exclude.includes('effect') || !Object.keys(structure.effects).length ? '' : `${desc_skill_effects(structure)}<br>`}\
+  ${exclude.includes('speed') ? '' : `speed: ${format(skillables.value.structures[structure.id].studyTotal() / gameSpeed, 4, 'eng')}/s<br>`}`.slice(0, -4);
 }
 
 function desc_stats(types){
@@ -778,15 +839,19 @@ else{
 
 function desc_skill_effects(skill){
   let desc = '';
+  let i = 0;
   for(let [index, entry] of Object.entries(skill.effects)){
     for(let [index2, entry2] of Object.entries(entry)){
+      if(i && !(i%4)){
+        desc += '<br>';
+      }
       if(['baseEffect', 'effect'].includes(index2)){
         const name = refValues.value.stats[index].hidden ? '???' : loc(`stat_${index}`);
         if(index2 === 'baseEffect'){
-          desc += `${name}: +${format(entry2(skill.trueLevel, skill.skillEffect), 4, 'eng')} `;
+          desc += `${name}: +${format(entry2(skill.trueLevel, skill.effect), 4, 'eng')} `;
         }
         if(index2 === 'effect'){
-          desc += `${name}: +${format((entry2(skill.trueLevel, skill.skillEffect) - 1) * 100, 4, 'eng')}% `;
+          desc += `${name}: +${format((entry2(skill.trueLevel, skill.effect) - 1) * 100, 4, 'eng')}% `;
         }
       }
       if(['skillEffect', 'skillBaseLevel', 'skillLevel'].includes(index2)){
@@ -809,13 +874,14 @@ function desc_skill_effects(skill){
           desc += `<span class='tag'>${name}</span> skill speed: +${format((entry2(skill.trueLevel) - 1) * 100, 4, 'eng')}% `;
         }
       }
+      i++;
     }
   }
   return desc;
 }
 
 
-export const skills = ref({
+const skills = {
   focus:new skill(
     'focus',
     ['stage1'],
@@ -829,7 +895,7 @@ export const skills = ref({
     },
     -1,
     function(){return desc_skill(this)},
-    function(){return skills.value.memorization.level >= 10}
+    function(){return skillables.value.skills.memorization.level >= 10}
   ),
   movement:new skill(
     'movement',
@@ -858,7 +924,7 @@ export const skills = ref({
     },
     -1,
     function(){return desc_skill(this)},
-    function(){return skills.value.movement.level >= 3}
+    function(){return skillables.value.skills.movement.level >= 3}
   ),
   digestion:new skill(
     'digestion',
@@ -873,7 +939,7 @@ export const skills = ref({
     },
     -1,
     function(){return desc_skill(this)},
-    function(){return skills.value.movement.level >= 3}
+    function(){return skillables.value.skills.movement.level >= 3}
   ),
   memorization:new skill(
     'memorization',
@@ -888,7 +954,7 @@ export const skills = ref({
     },
     -1,
     function(){return desc_skill(this)},
-    function(){return skills.value.movement.level >= 8 && skills.value.sensing.level >= 8}
+    function(){return skillables.value.skills.movement.level >= 8 && skillables.value.skills.sensing.level >= 8}
   ),
   scouting:new skill(
     'scouting',
@@ -903,7 +969,7 @@ export const skills = ref({
     },
     -1,
     function(){return desc_skill(this)},
-    function(){return skills.value.sensing.level >= 3}
+    function(){return skillables.value.skills.sensing.level >= 3}
   ),
   nutrientDigestion:new skill(
     'nutrientDigestion',
@@ -918,7 +984,7 @@ export const skills = ref({
     },
     -1,
     function(){return desc_skill(this)},
-    function(){return skills.value.digestion.level >= 3}
+    function(){return skillables.value.skills.digestion.level >= 3}
   ),
   deepScouting:new skill(
     'deepScouting',
@@ -936,7 +1002,7 @@ export const skills = ref({
     },
     -1,
     function(){return desc_skill(this)},
-    function(){return skills.value.scouting.level >= 15}
+    function(){return skillables.value.skills.scouting.level >= 15}
   ),
   efficientDigestion:new skill(
     'efficientDigestion',
@@ -954,7 +1020,7 @@ export const skills = ref({
     },
     -1,
     function(){return desc_skill(this)},
-    function(){return skills.value.nutrientDigestion.level >= 15}
+    function(){return skillables.value.skills.nutrientDigestion.level >= 15}
   ),
   multitasking:new skill(
     'multitasking',
@@ -972,7 +1038,7 @@ export const skills = ref({
     },
     100,
     function(){return desc_skill(this)},
-    function(){return skills.value.focus.level >= 2 }
+    function(){return skillables.value.skills.focus.level >= 2 }
   ),
   scavenger:new skill(
     'scavenger',
@@ -996,7 +1062,7 @@ export const skills = ref({
     },
     100,
     function(){return desc_skill(this)},
-    function(){return skills.value.deepScouting.level >= 10 && skills.value.efficientDigestion.level >= 10 }
+    function(){return skillables.value.skills.deepScouting.level >= 10 && skillables.value.skills.efficientDigestion.level >= 10 }
   ),
   rival1Study:new skill(
     'rival1Study',
@@ -1082,7 +1148,7 @@ export const skills = ref({
     },
     -1,
     function(){return desc_skill(this)},
-    function(){return skills.value.attack.level >= 3}
+    function(){return skillables.value.skills.attack.level >= 3}
   ),
   /*evasion:new skill(
     'evasion',
@@ -1099,7 +1165,7 @@ export const skills = ref({
       }
     },
     function(){return desc_skill(this, {2:loc('skillDesc_evasion_1', format((statValues.value.effectTotal('delayAttack')-1)*100, 4, 'eng'))})},
-    function(){return skills.value.rival1Study.level >= 12 && skills.value.rival2Study.level >= 8 }
+    function(){return skillables.value.skills.rival1Study.level >= 12 && skillables.value.skills.rival2Study.level >= 8 }
   ),*/
   rivalBehavior:new skill(
     'rivalBehavior',
@@ -1117,7 +1183,7 @@ export const skills = ref({
     },
     -1,
     function(){return desc_skill(this)},
-    function(){return skills.value.rival1Study.level >= 18 && skills.value.rival2Study.level >= 12 }
+    function(){return skillables.value.skills.rival1Study.level >= 18 && skillables.value.skills.rival2Study.level >= 12 }
   ),
   abilities:new skill(
     'abilities',
@@ -1132,7 +1198,7 @@ export const skills = ref({
     },
     -1,
     function(){return desc_skill(this)},
-    function(){return skills.value.movement.level >= 50 && skills.value.memorization.level >= 50 && save.value.rivals.rival2.unlocked }
+    function(){return skillables.value.skills.movement.level >= 50 && skillables.value.skills.memorization.level >= 50 && save.value.rivals.rival2.unlocked }
   ),
   mimicry:new skill(
     'mimicry',
@@ -1150,7 +1216,7 @@ export const skills = ref({
     },
     -1,
     function(){return desc_skill(this)},
-    function(){return skills.value.abilities.level >= 1 }
+    function(){return skillables.value.skills.abilities.level >= 1 }
   ),
   confusion:new skill(
     'confusion',
@@ -1168,7 +1234,7 @@ export const skills = ref({
     },
     -1,
     function(){return desc_skill(this)},
-    function(){return skills.value.abilities.level >= 5 }
+    function(){return skillables.value.skills.abilities.level >= 5 }
   ),
   boneGrowth:new skill(
     'boneGrowth',
@@ -1183,7 +1249,7 @@ export const skills = ref({
     },
     -1,
     function(){return desc_skill(this)},
-    function(){return skills.value.abilities.level >= 10 }
+    function(){return skillables.value.skills.abilities.level >= 10 }
   ),
   boneOffense:new skill(
     'boneOffense',
@@ -1201,7 +1267,7 @@ export const skills = ref({
     },
     -1,
     function(){return desc_skill(this)},
-    function(){return skills.value.boneGrowth.level >= 3 }
+    function(){return skillables.value.skills.boneGrowth.level >= 3 }
   ),
   core:new skill(
     'core',
@@ -1222,7 +1288,7 @@ export const skills = ref({
     },
     -1,
     function(){return desc_skill(this)},
-    function(){return skills.value.abilities.level >= 8 && skills.value.boneGrowth.level >= 5 }
+    function(){return skillables.value.skills.abilities.level >= 8 && skillables.value.skills.boneGrowth.level >= 5 }
   ),
   hibernation:new skill(
     'hibernation',
@@ -1237,12 +1303,50 @@ export const skills = ref({
   ),
 
 
-  
+  recollect:new skill(
+    'recollect',
+    ['stage2'],
+    {time:1},
+    300,
+    1,
+    {
+      focus:{
+        baseEffect(l){return 1 + 0.1 * l}
+      },
+      memory:{
+        baseEffect(l, e){return 5 * l * e}
+      },
+      senses:{
+        baseEffect(l, e){return 5 * l * e}
+      },
+      locomotion:{
+        baseEffect(l, e){return 5 * l * e}
+      },
+      digestion:{
+        baseEffect(l, e){return 5 * l * e}
+      },
+      digestionEfficiency:{
+        baseEffect(l, e){return 0.1 * l * e}
+      },
+      ability:{
+        baseEffect(l, e){return 4 * l * e}
+      },
+      boneGrowth:{
+        baseEffect(l, e){return 4 * l * e}
+      },
+      multitasking:{
+        baseEffect(l, e){return 0.025 * l * e}
+      }
+    },
+    10,
+    function(){return desc_skill(this)},
+    function(){return true}
+  ),
   stage2Focus:new skill(
     'stage2Focus',
     ['stage2'],
     {memory:1},
-    1000,
+    120000,
     4,
     {
       focus:{
@@ -1251,45 +1355,45 @@ export const skills = ref({
     },
     -1,
     function(){return desc_skill(this)},
-    function(){return skills.value.experience.level >= 10}
+    function(){return skillables.value.skills.recollect.level >= 3}
   ),
   experience:new skill(
     'experience',
     ['stage2'],
     {memory:0.25, senses:0.25, locomotion:0.25, digestion:0.25},
-    10000,
+    8000,
     1.05,
     {
       memory:{
-        baseEffect(l, e){return 50 + 1 * l * e}
+        baseEffect(l, e){return 1 * l * e}
       },
       senses:{
-        baseEffect(l, e){return 50 + 1 * l * e}
+        baseEffect(l, e){return 1 * l * e}
       },
       locomotion:{
-        baseEffect(l, e){return 50 + 1 * l * e}
+        baseEffect(l, e){return 1 * l * e}
       },
       digestion:{
-        baseEffect(l, e){return 50 + 1 * l * e}
-      },
+        baseEffect(l, e){return 1 * l * e}
+      }
     },
     -1,
     function(){return desc_skill(this)}
   ),
-  bodyScouting:new skill(
-    'bodyScouting',
+  exploration:new skill(
+    'exploration',
     ['stage2'],
     {locomotion:0.5, senses:0.3, memory:0.2},
     10000,
     1.08,
     {
-      bodyScouting:{
+      exploration:{
         baseEffect(l, e){return 0.1 * l * e}
       }
     },
     -1,
     function(){return desc_skill(this)},
-    function(){return skills.value.experience.level >= 1}
+    function(){return skillables.value.skills.experience.level >= 1}
   ),
   fleshDigestion:new skill(
     'fleshDigestion',
@@ -1304,8 +1408,110 @@ export const skills = ref({
     },
     -1,
     function(){return desc_skill(this)},
-    function(){return skills.value.bodyScouting.level >= 1}
-  )
+    function(){return skillables.value.skills.exploration.level >= 1}
+  ),
+  stage2EfficientDigestion:new skill(
+    'stage2EfficientDigestion',
+    ['stage2'],
+    {digestion:0.6, senses:0.4},
+    16000,
+    1.12,
+    {
+      digestionEfficiency:{
+        effect(l, e){return 1 + 0.05 * l * e}
+      },
+      digestion:{
+        effect(l, e){return 1 + 0.08 * l * e}
+      }
+    },
+    -1,
+    function(){return desc_skill(this)},
+    function(){return skillables.value.skills.fleshDigestion.level >= 3}
+  ),
+  stage2Abilities:new skill(
+    'stage2Abilities',
+    ['stage2', 'ability'],
+    {memory:0.5, ability:0.2, senses:0.3},
+    20000,
+    1.08,
+    {
+      ability:{
+        effect(l, e){return 1 + (0.08 * l * e)}
+      },
+      boneGrowth:{
+        effect(l, e){return 1 + (0.08 * l * e)}
+      }
+    },
+    -1,
+    function(){return desc_skill(this)},
+    function(){return skillables.value.skills.recollect.level >= 10}
+  ),
+  stage2Core:new skill(
+    'stage2Core',
+    ['stage2', 'ability'],
+    {boneGrowth:0.4, ability:0.3, memory:0.3},
+    35000,
+    1.15,
+    {
+      memory:{
+        effect(l, e){return 1 + (l / (l + 50) * 2 * e)}
+      },
+      multitasking:{
+        baseEffect(l, e){return (0.02 * l * e)}
+      }
+    },
+    -1,
+    function(){return desc_skill(this)},
+    function(){return skillables.value.skills.experience.level >= 5}
+  ),
+  structureAnalyzing:new skill(
+    'structureAnalyzing',
+    ['stage2'],
+    {memory:0.6, locomotion:0.2, senses:0.2},
+    45000,
+    1.15,
+    {
+      structureStudyRate:{
+        baseEffect(l, e){return 0.04 * l * e}
+      },
+    },
+    -1,
+    function(){return desc_skill(this)},
+    function(){return save.value.exploration.count >= 1}
+  ),
+  structureFocus:new skill(
+    'structureFocus',
+    ['stage2'],
+    {ability:0.2, memory:0.2, locomotion:0.6},
+    160000,
+    5,
+    {
+      structureFocus:{
+        baseEffect(l, e){return 1 * l * e}
+      },
+    },
+    -1,
+    function(){return desc_skill(this)},
+    function(){return save.value.exploration.count >= 3}
+  ),
+  navigatePathways:new skill(
+    'navigatePathways',
+    ['stage2'],
+    {locomotion:0.7, senses:0.3},
+    110000,
+    1.12,
+    {
+      exploration:{
+        effect(l, e){return 1 + 0.025 * l * e}
+      },
+      locomotion:{
+        effect(l, e){return 1 + 0.04 * l * e}
+      }
+    },
+    -1,
+    function(){return desc_skill(this)},
+    function(){return skillables.value.structures.vessels.level >= 3}
+  ),
   /*test1:new skill(
     'test1',
     ['basic'],
@@ -1359,17 +1565,33 @@ export const skills = ref({
     function(){return desc_skill(this)},
     function(){return true}
   )*/
-});
+};
 
-export const structures = ref({
-  pathways:new structure(
-    'pathways',
+const structures = {
+  bones:new structure(
+    'bones',
     [],
-    {locomotion:0.8, memory:0.2},
+    {boneGrowth:0.6, digestion:0.2, memory:0.2},
     150000,
     1.1,
     {
-      bodyScouting:{
+      exploration:{
+        effect(l, e){return 1 + 0.01 * l * e}
+      },
+      boneGrowth:{
+        effect(l, e){return 1 + 0.025 * l * e}
+      }
+    },
+    function(){return desc_structure(this)}
+  ),
+  muscles:new structure(
+    'muscles',
+    [],
+    {locomotion:0.6, ability:0.4},
+    150000,
+    1.1,
+    {
+      exploration:{
         effect(l, e){return 1 + 0.01 * l * e}
       },
       locomotion:{
@@ -1377,8 +1599,81 @@ export const structures = ref({
       }
     },
     function(){return desc_structure(this)}
-  )
+  ),
+  vessels:new structure(
+    'vessels',
+    [],
+    {locomotion:0.8, memory:0.2},
+    150000,
+    1.1,
+    {
+      exploration:{
+        effect(l, e){return 1 + 0.01 * l * e}
+      },
+      locomotion:{
+        effect(l, e){return 1 + 0.025 * l * e}
+      }
+    },
+    function(){return desc_structure(this)}
+  ),
+  acid:new structure(
+    'acid',
+    [],
+    {digestion:0.7, senses:0.25},
+    150000,
+    1.1,
+    {
+      exploration:{
+        effect(l, e){return 1 + 0.01 * l * e}
+      },
+      digestion:{
+        effect(l, e){return 1 + 0.025 * l * e}
+      }
+    },
+    function(){return desc_structure(this)}
+  ),
+  rhythmic:new structure(
+    'rhythmic',
+    [],
+    {locomotion:0.3, senses:0.4, memory:0.3},
+    150000,
+    1.1,
+    {
+      exploration:{
+        effect(l, e){return 1 + 0.01 * l * e}
+      },
+      locomotion:{
+        effect(l, e){return 1 + 0.025 * l * e}
+      },
+      senses:{
+        effect(l, e){return 1 + 0.025 * l * e}
+      }
+    },
+    function(){return desc_structure(this)}
+  ),
+  wall:new structure(
+    'wall',
+    [],
+    {senses:0.5, memory:0.3, locomotion:0.2},
+    150000,
+    1.1,
+    {
+      exploration:{
+        effect(l, e){return 1 + 0.01 * l * e}
+      },
+      senses:{
+        effect(l, e){return 1 + 0.025 * l * e}
+      }
+    },
+    function(){return desc_structure(this)}
+  ),
+};
+export const skillables = ref({
+  skills:skills,
+  structures:structures
+});
+export const skillablesOrder = ref({
+  skills:Object.keys(skills),
+  structures:Object.keys(structures)
 })
-export const skillsOrder = Object.keys(skills.value);
-export const structureOrder = Object.keys(structures.value);
 

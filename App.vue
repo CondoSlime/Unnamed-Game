@@ -7,19 +7,21 @@ import PopupMain from './components/PopupMain.vue';
 import ProgressBar from './components/Progressbar.vue';
 import Guide from './components/Guides.vue';
 import {ref, watch, onMounted, onUnmounted, computed} from 'vue';
-import {save, initGame, saveGame, exportGame, importGame, resetGame} from './Save.js';
+import {save, initGame, saveGame, exportGame, importGame, resetGame, compressSave} from './Save.js';
 import {format} from './Functions.js';
 import loc from './Localization.js';
 import popup from './Popup.js';
-import {statValues, skills, structures, guides, skillsOrder, structureOrder, values, refValues, updateStage, updateSkills, skillLockByTag, study, formulas} from './Values.js';
+import {statValues, skillables, skillablesOrder, guides, values, refValues, updateStage, updateEffects, skillLockByTag, resetByTag, study, formulas} from './Values.js';
 
 /*save.stats = deepClone(entry);
 save.rivals = deepClone(rivalsBase);
-for(let [index, entry] of Object.entries(skills.value)){
+for(let [index, entry] of Object.entries(skillables.value.skills)){
     save.skills[index] = {level:0, exp:0}
 }*/
 const gameSpeed = values.misc.gameSpeed;
 const timerSpeed = values.misc.timerSpeed;
+const timerMult = 1000 / timerSpeed;
+const totalSpeed = timerMult * gameSpeed;
 initGame();
 updateStage();
 checkValues();
@@ -60,21 +62,15 @@ function timer(action){
   }
 }
 function gameLoop(){
-  for(let i=study.value.order('skill').length-1;i>=0; i--){
-    const activeVal = study.value.order('skill')[i];
-    skills.value[activeVal].advance(gameSpeed * 10); //level up activated skills
-    if(skills.value[activeVal].capped){
-      study.value.switch('skill', activeVal);
-    }
+  for(let i=study.value.order('skills').length-1;i>=0; i--){
+    const activeVal = study.value.order('skills')[i];
+    skillables.value.skills[activeVal].advance(gameSpeed * 10); //level up activated skills
   }
-  for(let i=study.value.order('structure').length-1;i>=0;i--){
-    const activeVal = study.value.order('structure')[i];
-    structures.value[activeVal].advance(gameSpeed * 10); //level up activated skills
-    if(structures.value[activeVal].capped){
-      study.value.switch('structure', activeVal);
-    }
+  for(let i=study.value.order('structures').length-1;i>=0;i--){
+    const activeVal = study.value.order('structures')[i];
+    skillables.value.structures[activeVal].advance(gameSpeed * 10); //level up activated skills
   }
-  updateSkills();
+  updateEffects();
   const size = save.value.res.size;
   const attack = statValues.value.effectTotal('attack');
   const aggression = statValues.value.effectTotal('attackSpeed');
@@ -83,7 +79,7 @@ function gameLoop(){
   if(save.value.stage === 1){
     const gathering = formulas.nutrientGathering();
     const digestion = formulas.nutrientDigestion();
-    if(skills.value.scouting.level >= 1 || save.value.res.nutrients > 0){
+    if(skillables.value.skills.scouting.level >= 1 || save.value.res.nutrients > 0){
       save.value.res.nutrients += gathering; //find nutrients
       if(nutrAction === 'scouting'){
         if(refValues.value.advanceTimer('nutrAction')){ //cycle from gathering into digestion after 30s
@@ -102,11 +98,14 @@ function gameLoop(){
   }
   else if(save.value.stage === 2){
 
-    const scouting = statValues.value.effectTotal('bodyScouting');
-    //save.value.timers.bodyExplore = 119 + (2 * Math.random());
+    const exploration = statValues.value.effectTotal('exploration');
+    //save.value.timers.exploration = 119 + (2 * Math.random());
     //body explore timer increases by 33.3% whenever the bar fills. This is handled in checkValues() because it triggers immediately once and after every gameLoop()
-    if(refValues.value.advanceTimer('bodyExplore', scouting)){
-      save.value.bodyExplore.count++;
+    if(refValues.value.advanceTimer('exploration', exploration)){
+      save.value.exploration.count++;
+      if(refValues.value.settings.gameSection !== 'exploration'){
+        refValues.value.misc.exploreNotif = true;
+      }
     }
 
     const digestion = formulas.nutrientDigestion();
@@ -130,7 +129,7 @@ function gameLoop(){
     const otherRivalName = values.rivalNames[(i+1)%2];
     const currRival = save.value.rivals[rivalName];
     const otherRival = save.value.rivals[otherRivalName];
-    if(currRival.unlocked && currRival.alive && skills.value[`rival1Study`].level >= 1){ //both rivals can attack when the first rival is first studied
+    if(currRival.unlocked && currRival.alive && skillables.value.skills[`rival1Study`].level >= 1){ //both rivals can attack when the first rival is first studied
       currRival.size += formulas.rivalPassiveSizeGain(rivalName);
       let attackTimer = refValues.value.advanceTimer(`${rivalName}Attack`, formulas.rivalAttackSpeed(rivalName), ['subtract']);
       if(attackTimer){ //rival attacks
@@ -170,7 +169,7 @@ function gameLoop(){
           save.value.rivals[rivalName].lastTarget = "you";
         }
         if(currRival.lastTarget === 'fooled'){
-          currRival.confuse += formulas.rivalConfuseGain(rivalName) * 2; //when a rival is fooled by mimicry, apply 2x your confusion to them.
+          currRival.confuse += formulas.rivalConfuseGain(rivalName) * values.fooledConfuseMult; //when a rival is fooled by mimicry, apply 2x your confusion to them.
         }
       }
     }
@@ -215,7 +214,7 @@ watch((() => refValues.value.settings.pause), () => {
 })
 
 function checkValues(){ //check state of values. Run once on page load too.
-  if(skills.value.hibernation.level >= 1 && save.value.stage === 1 && !popup.value.active){
+  if(skillables.value.skills.hibernation.level >= 1 && save.value.stage === 1 && !popup.value.active){
     popup.value.active = true;
     popup.value.option1 = 'proceed!';
     refValues.value.settings.pause = true;
@@ -263,9 +262,9 @@ function checkValues(){ //check state of values. Run once on page load too.
     }
   }
   else if(save.value.stage === 2){
-    refValues.value.timers.bodyExplore = values.timers.bodyExplore * values.misc.bodyExploreTimeIncrease ** save.value.bodyExplore.count; //exploration timer increases by 33% every time the bar fills
-    for(let i=0;i<structureOrder.length;i++){
-      structures.value[structureOrder[i]].unlocked = (save.value.bodyExplore.count > i); //unlock structures in order.
+    refValues.value.timers.exploration = values.timers.exploration * values.misc.exploreTimeIncrease ** save.value.exploration.count; //exploration timer increases by 33% every time the bar fills
+    for(let i=0;i<skillablesOrder.value.structures.length;i++){
+      skillables.value.structures[skillablesOrder.value.structures[i]].unlocked = (save.value.exploration.count > i); //unlock structures in order.
     }
   }
 }
@@ -318,21 +317,22 @@ const statRows = computed(() => {
 const sizeLoss = computed(() => formulas.passiveSizeLoss());
 const lastUnlocked = computed(() => {
   //items are unknown if not unlocked and hidden completely if there are no unlocked ones after it.
-  const last = skillsOrder.findLastIndex((index) => skills.value[index].unlocked);
+  const last = skillablesOrder.value.skills.findLastIndex((index) => skillables.value.skills[index].unlocked);
   return last;
 });
 const nutrientsDesc = computed(() => {
   let desc = ``;
   const nutrients = formulas.nutrientGathering();
   const digestion = formulas.nutrientDigestion();
+  const sizeGain = formulas.digestSizeGain(digestion);
   if(nutrients > 0){
-    desc += loc('resDesc_nutrients_1', format(nutrients / gameSpeed, 4, 'eng'));
+    desc += loc('resDesc_nutrients_1', format(nutrients * timerMult, 4, 'eng'));
   }
   if(digestion > 0){
     if(desc){
       desc += '<br>';
     }
-    desc += loc('resDesc_nutrients_2', format(digestion / gameSpeed, 4, 'eng'))
+    desc += loc('resDesc_nutrients_2', format(digestion * timerMult, 4, 'eng'), format(sizeGain * timerMult, 4, 'eng'));
   }
   return desc;
 });
@@ -343,7 +343,7 @@ const selfInfo = computed(() => {
     if(!refValues.value.rivalAttacks){
       content += loc('self_status');
     }
-    else if(!skills.value.attack.level){
+    else if(!skillables.value.skills.attack.level){
       content += loc('self_status_2');
     }
     else if(!refValues.value.rivalsAlive){
@@ -462,13 +462,13 @@ const mimicColor = computed(() => {
         <div class="resourceItem">
           <Tooltip :text="`${loc('resDesc_size')}
           <br>${loc('resDesc_size_1', ((formulas.sizeBonus() - 1)*100).toFixed(0))}
-          ${save.stage === 2 && skills.fleshDigestion.level >= 1 ? `<br>${loc('resDesc_size_4', format(formulas.nutrientDigestion(), 4, 'eng'))}` : ''}
-          ${skills.nutrientDigestion.level >= 1 ? `<br>${loc('resDesc_size_2', format(formulas.digestSizeGain(1) * 100, 4, 'eng'))}` : ''}
-          ${sizeLoss ? `<br>${loc('resDesc_size_3', format(sizeLoss / gameSpeed, 4, 'eng'))}` : ''}`"/>
+          ${save.stage === 2 && skillables.skills.fleshDigestion.level >= 1 ? `<br>${loc('resDesc_size_4', format(formulas.digestSizeGain(formulas.nutrientDigestion()) * timerMult, 4, 'eng'))}` : ''}
+          ${skillables.skills.nutrientDigestion.level >= 1 ? `<br>${loc('resDesc_size_2', format(formulas.digestSizeGain(1) * 100, 4, 'eng'))}` : ''}
+          ${sizeLoss ? `<br>${loc('resDesc_size_3', format(sizeLoss * timerMult, 4, 'eng'))}` : ''}`"/>
           {{loc('res_size', format(save.res.size, 4, 'eng')) }}
         </div>
-        <div class="resourceItem" v-if="save.stage === 2">
-          <template v-if="skills.bodyScouting.level >= 1">
+        <!--<div class="resourceItem" v-if="save.stage === 2">
+          <template v-if="skills.exploration.level >= 1">
             {{loc('res_structureFocus', format(study.max('structure'), 4, 'eng') - format(study.used('structure'), 4, 'eng'), format(study.max('structure'), 4, 'eng')) }}
           </template>
         </div>
@@ -478,7 +478,7 @@ const mimicColor = computed(() => {
           <br>${loc('resDesc_focus_2', format(formulas.studyPenalty() * 100, 4, 'eng'))}`"/>
           {{loc('res_focus', format(study.max('skill'), 4, 'eng') - format(study.used('skill'), 4, 'eng'), format(study.max('skill'), 4, 'eng')) }}
         </div>
-        <!--<div class="resourceItem">
+        <div class="resourceItem">
           <template v-if="skills.attack.level >= 1 && refValues.rivalsAlive">
             <Tooltip :text="`${loc('self_status_combat')}
             ${save.rivals.self.lastTarget ? `<br>${loc('self_status_combat_2', format(save.rivals.self.stolen, 4, 'eng'), loc(`${save.rivals.self.lastTarget}_name`))}` : ''}`"/>
@@ -535,6 +535,61 @@ const mimicColor = computed(() => {
           <div class="button style-1" :class="{selected:refValues.settings.screen === 'settings'}" @click="refValues.settings.screen = (refValues.settings.screen !== 'settings' ? 'settings' : 'game')">Settings</div>
         </div>
         <div>
+          <div class="button style-1" :class="{selected:refValues.settings.screen === 'debug'}" @click="refValues.settings.screen = (refValues.settings.screen !== 'debug' ? 'debug' : 'game')">Debug</div>
+        </div>
+        <div>
+          <div class="button style-1" :class="{selected:save.settings.autoSave}" @click="save.settings.autoSave = !save.settings.autoSave">
+            {{ save.settings.autoSave ? "Disable" : "Enable" }} Autosave
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="sectionMain">
+      <div class="innerLeft">
+        <template v-if="refValues.settings.screen === 'game'">
+          <div class="slimes">
+            <div class="self slime">
+              <div class="body" :style="{width:`${save.res.size ** 0.75}px`}" :class="mimicColor">
+                <div class="attackProgress">
+                  <ProgressBar :type="'circle'" :progress="save.timers.selfAttack / refValues.timers.selfAttack * 100" :color="'var(--progressBar-color-combat-self)'" :style="{opacity:0.3}"></ProgressBar>
+                  <ProgressBar :type="'line-circle'" :progress="save.rivals.self.mimicry / refValues.rivals.self.mimicryMax * 100" :color="'var(--progressBar-color-mimicry)'" :lineWidth="5" :style="{opacity:0.5}"></ProgressBar>
+                  
+                  <Tooltip :text="selfInfo"/>
+                </div>
+              </div>
+            </div>
+            <div v-show="save.rivals.rival1.unlocked && save.stage === 1" class="rival1 slime">
+              <div class="body" :style="{width:`${save.rivals.rival1.size ** 0.75}px`}" :class="{dead:!save.rivals.rival1.alive}">
+                <div class="attackProgress">
+                  <ProgressBar v-if="skillables.skills.rival1Study.level >= 15" :type="'circle'" :progress="save.timers.rival1Attack / refValues.timers.rival1Attack * 100" :color="'var(--progressBar-color-combat-rival)'" :style="{opacity:0.5}"></ProgressBar>
+                  <ProgressBar :type="'line-circle'" :progress="save.rivals.rival1.confuse / refValues.rivals.rival1.confuseMax * 100" :color="'var(--progressBar-color-confusion)'" :lineWidth="5" :style="{opacity:0.5}"></ProgressBar>
+                  
+                  <Tooltip :text="rival1Info"/>
+                  <template v-if="save.rivals.rival1.alive && false">
+                    <div class="warnNotif front" v-if="refValues.rivals.rival1.warn" :class="{neutral:save.rivals.rival1.lastTarget !== 'you'}">*</div> <!--notification star after an attack-->
+                  </template>
+                </div>
+              </div>
+            </div>
+            <div v-show="save.rivals.rival2.unlocked && save.stage === 1" class="rival2 slime">
+              <div class="body" :style="{width:`${save.rivals.rival2.size ** 0.75}px`}" :class="{dead:!save.rivals.rival2.alive}">
+                <div class="attackProgress">
+                  <ProgressBar v-if="skillables.skills.rival2Study.level >= 15" :type="'circle'" :progress="save.timers.rival2Attack / refValues.timers.rival2Attack * 100" :color="'var(--progressBar-color-combat-rival)'" :style="{opacity:0.5}"></ProgressBar>
+                  <ProgressBar :type="'line-circle'" :progress="save.rivals.rival2.confuse / refValues.rivals.rival2.confuseMax * 100" :color="'var(--progressBar-color-confusion)'" :lineWidth="5" :style="{opacity:0.5}"></ProgressBar>
+                  
+                  <Tooltip :text="rival2Info"/>
+                  <template v-if="save.rivals.rival2.alive && false">
+                    <div class="warnNotif front" v-if="refValues.rivals.rival2.warn" :class="{neutral:save.rivals.rival2.lastTarget !== 'you'}">*</div> <!--notification star after an attack-->
+                  </template>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+        <template v-else-if="refValues.settings.screen === 'settings'">
+        </template>
+        <template v-else-if="refValues.settings.screen === 'debug'">
+        <div>
           <div class="button style-1" @click="save.timers.rival1Attack=refValues.timers.rival1Attack">
             <Tooltip :text="`Rival 1 timer: ${format(save.timers.rival1Attack, 4, 'eng')}/${refValues.timers.rival1Attack}`"/>
             Force rival 1 attack
@@ -553,13 +608,23 @@ const mimicColor = computed(() => {
           </div>
         </div>
         <div>
-          <div class="button style-1" :class="{selected:save.settings.autoSave}" @click="save.settings.autoSave = !save.settings.autoSave">
-            {{ save.settings.autoSave ? "Disable" : "Enable" }} Autosave
+          <div class="button style-1" @click="skillLockByTag('stage1');">
+            Lock/unlock all stage 1 skills
           </div>
         </div>
         <div>
-          <div class="button style-1" @click="skillLockByTag('stage1');">
-            Lock/unlock all stage 1 skills
+          <div class="button style-1" @click="skillLockByTag('stage2');">
+            Lock/unlock all stage 2 skills
+          </div>
+        </div>
+        <div>
+          <div class="button style-1" @click="resetByTag(`stage${save.stage}`, 'skills');">
+            Reset all skills of current stage
+          </div>
+        </div>
+        <div>
+          <div class="button style-1" @click="resetByTag(`all`, 'structures');">
+            Reset all structures
           </div>
         </div>
         <div>
@@ -587,51 +652,6 @@ const mimicColor = computed(() => {
             Show popup
           </div>
         </div>
-      </div>
-    </div>
-    <div class="sectionMain">
-      <div class="innerLeft">
-        <template v-if="refValues.settings.screen === 'game'">
-          <div class="slimes">
-            <div class="self slime">
-              <div class="body" :style="{width:`${save.res.size ** 0.75}px`}" :class="mimicColor">
-                <div class="attackProgress">
-                  <ProgressBar :type="'circle'" :progress="save.timers.selfAttack / refValues.timers.selfAttack * 100" :color="'var(--progressBar-color-combat-self)'" :style="{opacity:0.3}"></ProgressBar>
-                  <ProgressBar :type="'line-circle'" :progress="save.rivals.self.mimicry / refValues.rivals.self.mimicryMax * 100" :color="'var(--progressBar-color-mimicry)'" :lineWidth="5" :style="{opacity:0.5}"></ProgressBar>
-                  
-                  <Tooltip :text="selfInfo"/>
-                </div>
-              </div>
-            </div>
-            <div v-show="save.rivals.rival1.unlocked && save.stage === 1" class="rival1 slime">
-              <div class="body" :style="{width:`${save.rivals.rival1.size ** 0.75}px`}" :class="{dead:!save.rivals.rival1.alive}">
-                <div class="attackProgress">
-                  <ProgressBar v-if="skills.rival1Study.level >= 15" :type="'circle'" :progress="save.timers.rival1Attack / refValues.timers.rival1Attack * 100" :color="'var(--progressBar-color-combat-rival)'" :style="{opacity:0.5}"></ProgressBar>
-                  <ProgressBar :type="'line-circle'" :progress="save.rivals.rival1.confuse / refValues.rivals.rival1.confuseMax * 100" :color="'var(--progressBar-color-confusion)'" :lineWidth="5" :style="{opacity:0.5}"></ProgressBar>
-                  
-                  <Tooltip :text="rival1Info"/>
-                  <template v-if="save.rivals.rival1.alive && false">
-                    <div class="warnNotif front" v-if="refValues.rivals.rival1.warn" :class="{neutral:save.rivals.rival1.lastTarget !== 'you'}">*</div> <!--notification star after an attack-->
-                  </template>
-                </div>
-              </div>
-            </div>
-            <div v-show="save.rivals.rival2.unlocked && save.stage === 1" class="rival2 slime">
-              <div class="body" :style="{width:`${save.rivals.rival2.size ** 0.75}px`}" :class="{dead:!save.rivals.rival2.alive}">
-                <div class="attackProgress">
-                  <ProgressBar v-if="skills.rival2Study.level >= 15" :type="'circle'" :progress="save.timers.rival2Attack / refValues.timers.rival2Attack * 100" :color="'var(--progressBar-color-combat-rival)'" :style="{opacity:0.5}"></ProgressBar>
-                  <ProgressBar :type="'line-circle'" :progress="save.rivals.rival2.confuse / refValues.rivals.rival2.confuseMax * 100" :color="'var(--progressBar-color-confusion)'" :lineWidth="5" :style="{opacity:0.5}"></ProgressBar>
-                  
-                  <Tooltip :text="rival2Info"/>
-                  <template v-if="save.rivals.rival2.alive && false">
-                    <div class="warnNotif front" v-if="refValues.rivals.rival2.warn" :class="{neutral:save.rivals.rival2.lastTarget !== 'you'}">*</div> <!--notification star after an attack-->
-                  </template>
-                </div>
-              </div>
-            </div>
-          </div>
-        </template>
-        <template v-else-if="refValues.settings.screen === 'settings'">
         </template>
         <template v-else-if="refValues.settings.screen === 'stats'">
           <div style="display:flex; flex-wrap:wrap; align-items:center; padding:10px 0 20px 0;">
@@ -650,7 +670,7 @@ const mimicColor = computed(() => {
                 {{ loc(`stat_${key}`) }}
               </div>
             </template>
-            <template v-for="(val, key) in skills" :key="key">
+            <template v-for="(val, key) in skillables.skills" :key="key">
               <div v-if="refValues.settings.infoMode === 'skills' && save.skills[key].unlocked" class="statsItem button style-1" :class="{selected:(refValues.settings.showSkill === key)}" @click="refValues.settings.showSkill = key;">
                 {{ loc(`skill_${key}`) }}
               </div>
@@ -664,25 +684,34 @@ const mimicColor = computed(() => {
       <div class="innerMain">
         <template v-if="refValues.settings.screen === 'game'">
           <div class="areas">
-            <div class="inline-button style-1" :class="{selected:refValues.settings.gameSection === 'skills'}" style="margin:2px 20px 0 0; padding:0 10px; min-width:100px;" @click="refValues.settings.gameSection = 'skills';">Skills</div>
-            <div v-if="skills.bodyScouting.level >= 1" class="inline-button style-1" :class="{selected:refValues.settings.gameSection === 'exploration'}" style="margin:2px 20px 0 0; padding:0 10px; min-width:100px;" @click="refValues.settings.gameSection = 'exploration';">Exploration</div>
+            <div class="inline-button style-1" :class="{selected:refValues.settings.gameSection === 'skills', danger:study.flash.skills, highlight:refValues.misc.skillNotif}" style="margin:2px 20px 0 0; padding:0 10px; min-width:100px;" @click="refValues.settings.gameSection = 'skills'; refValues.misc.skillsNotif = false;">
+              Skills
+              ({{format(study.used('skills'), 4, 'eng')}}/{{format(study.max('skills'), 4, 'eng') }}) ({{ format(formulas.studyPenalty()*100, 4, 'eng') }}%)
+            </div>
+            <div v-if="skillables.skills.exploration.level >= 1" class="inline-button style-1" :class="{selected:refValues.settings.gameSection === 'exploration', danger:study.flash.structures, highlight:refValues.misc.exploreNotif}" style="margin:2px 20px 0 0; padding:0 10px; min-width:100px;" @click="refValues.settings.gameSection = 'exploration'; refValues.misc.exploreNotif = false;">
+              Exploration
+              ({{format(study.used('structures'), 4, 'eng')}}/{{format(study.max('structures'), 4, 'eng') }})
+            </div>
           </div>
           <div v-if="refValues.settings.gameSection === 'skills'" class="skills">
-            <template v-for="(item, index) in skillsOrder">
-              <SkillElem v-if="lastUnlocked >= index && skills[item].lockLevel < 2" :key="skills[item].id" :skill="skills[item]" :study="study"/>
+            <template v-for="(item, index) in skillablesOrder.skills">
+              <SkillElem v-if="lastUnlocked >= index && skillables.skills[item].lockLevel < 2" :key="skillables.skills[item].id" :skill="skillables.skills[item]" :study="study"/>
             </template>
           </div>
-          <div v-if="refValues.settings.gameSection === 'exploration'" class="exploration">
+          <template v-if="refValues.settings.gameSection === 'exploration'">
             <div class="exploreBar">
-              <ProgressBar :type="'bar'" :class="'exploreBarInner'" :progress="refValues.getTimer('bodyExplore')"/><!--linear-gradient(transparent 0%, transparent ${refValues.getTimer('bodyExplore')}%, black ${refValues.getTimer('bodyExplore')}%, black 100%)-->
-              <div class="flex-center front full exploreBarText" :style="{'--exploreBarText-width':`${refValues.getTimer('bodyExplore')}%`}">
-                {{ refValues.getTimer('bodyExplore') }}%
+              <Tooltip :text="'You are currently exploring your surroundings.'"/>
+              <ProgressBar :type="'bar'" :class="'exploreBarInner'" :progress="refValues.getTimer('exploration')"/><!--linear-gradient(transparent 0%, transparent ${refValues.getTimer('exploration')}%, black ${refValues.getTimer('exploration')}%, black 100%)-->
+              <div class="flex-center front full exploreBarText" :style="{'--exploreBarText-width':`${refValues.getTimer('exploration')}%`}">
+                {{ refValues.getTimer('exploration') }}%
               </div>
             </div>
-            <template v-for="(item, index) in structureOrder">
-              <StructureElem v-if="structures[item].lockLevel < 2" :key="structures[item].id" :structure="structures[item]" :study="study"/>
-            </template>
-          </div>
+            <div class="skills exploration">
+              <template v-for="(item, index) in skillablesOrder.structures">
+                <StructureElem v-if="skillables.structures[item].unlocked && skillables.structures[item].lockLevel < 2" :key="skillables.structures[item].id" :structure="skillables.structures[item]" :study="study"/>
+              </template>
+            </div>
+          </template>
         </template>
         <div class="settings" v-else-if="refValues.settings.screen === 'settings'">
           <textarea id="saveArea" class="saveArea"></textarea>

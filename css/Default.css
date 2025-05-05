@@ -53,6 +53,7 @@
     --tooltip-background:#000000;
     --tooltip-text:#FFFFFF;
     --tooltip-border:#BBBBBB;
+    --highlight-color:#AAAAFF; /*flashes from default background to highlight color every 3 seconds */
     --focus-skill-color:#444400;
     --focus-structure-color:radial-gradient(#7777DD, #BBBBFF);
     --progressBar-color-progression:#225522;
@@ -172,6 +173,14 @@
 .button.style-1:hover, .button.style-1:focus, .button.style-1.selected,
 .inline-button.style-1:hover, .inline-button.style-1:focus, .inline-button.style-1.selected{
     background:var(--style-1-selected-background);
+}
+.highlight:not(.selected){
+    animation: highlightFlash 3s infinite;
+}
+@keyframes highlightFlash{
+    50% {
+        background:var(--highlight-color);
+    }
 }
 .flex-center{ display:flex; align-items:center; justify-content:center; }
 .inline-flex-center{ display:inline-flex; align-items:center; justify-content:center; }
@@ -544,7 +553,7 @@ translate(- <, -, ^)
 .skill{ color:var(--skill-color); }
 .tag{ color:var(--tag-color); }
 .stat{ color:var(--stat-color); }
-.danger{ color:var(--text-danger); }
+.danger.danger{ color:var(--text-danger); }
 
 .warnNotif{
     position:absolute;
